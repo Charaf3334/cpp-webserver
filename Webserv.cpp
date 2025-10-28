@@ -96,6 +96,7 @@ void Webserv::read_file(void)
     while (std::getline(this->config_file, line))
     {
         std::string *parts = this->split(line);
+        
         for (size_t i = 0; i < this->countParts(line); i++)
             this->tokens.push_back(parts[i]);
         delete[] parts;
@@ -130,7 +131,7 @@ void Webserv::read_file(void)
     }
 }
 
-Webserv::Server Webserv::parseServer(size_t i, int &brackets_flag)
+Webserv::Server Webserv::parseServer(size_t &i, int &brackets_flag)
 {
     Server server;
     static_cast<void>(brackets_flag);
@@ -139,22 +140,65 @@ Webserv::Server Webserv::parseServer(size_t i, int &brackets_flag)
         if (this->tokens[i] == "listen")
         {
             i++;
+            if (i >= this->tokens.size())
+                throw std::runtime_error("Error: Expected value after 'listen'");
+            
+            // Check if this token ends with semicolon
             if (this->tokens[i].find(';') == std::string::npos)
-                throw std::runtime_error("Error: Semicolon is missing or it's not in its place.");
-            server.port = atoi((this->tokens[i].substr(0, this->tokens[i].length() - 1)).c_str());
+                throw std::runtime_error("Error: 'listen' directive must end with semicolon");
+            
+            // Extract value (remove semicolon)
+            std::string value = this->tokens[i].substr(0, this->tokens[i].length() - 1);
+            
+            if (value.empty())
+                throw std::runtime_error("Error: 'listen' has no value");
+            
+            server.port = atoi(value.c_str());
+            i++;
         }
         else if (this->tokens[i] == "server_name")
         {
             i++;
-            for (; this->tokens[i].find(';') == std::string::npos; i++)
+            if (i >= this->tokens.size())
+                throw std::runtime_error("Error: Expected value after 'server_name'");
+            
+            bool foundSemicolon = false;
+            
+            // Collect all values until we find semicolon
+            while (i < this->tokens.size())
+            {
+                if (this->tokens[i].find(';') != std::string::npos)
+                {
+                    // This token has the semicolon
+                    std::string lastValue = this->tokens[i].substr(0, this->tokens[i].length() - 1);
+                    
+                    if (!lastValue.empty())
+                        server.names.push_back(lastValue);
+                    
+                    foundSemicolon = true;
+                    i++;
+                    break;
+                }
+                
+                // Regular value without semicolon
                 server.names.push_back(this->tokens[i]);
-            server.names.push_back(this->tokens[i].substr(0, this->tokens[i].length() - 1));
+                i++;
+            }
+            
+            if (!foundSemicolon)
+                throw std::runtime_error("Error: 'server_name' directive must end with semicolon");
+            
+            if (server.names.empty())
+                throw std::runtime_error("Error: 'server_name' has no values");
+            
+            // Debug print
             for (size_t k = 0; k < server.names.size(); k++)
                 std::cout << server.names[k] << std::endl;
         }
         else
-            throw std::runtime_error("Error: Unknown token " + this->tokens[i]);
-        i++;
+        {
+            i++; // Move to next token if unknown directive
+        }
     }
 
     return server;

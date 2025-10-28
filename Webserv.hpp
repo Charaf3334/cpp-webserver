@@ -44,7 +44,7 @@ class Webserv
 
         std::string* split(const std::string line);
         void read_file(void);
-        Server parseServer(size_t i, int &brackets_flag);
+        Server parseServer(size_t &i, int &brackets_flag);
 };
 
 #endif
