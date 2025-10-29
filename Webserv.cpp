@@ -88,6 +88,36 @@ std::string* Webserv::split(const std::string line)
     return parts;
 }
 
+std::vector<std::string> Webserv::semicolonFix(const std::vector<std::string> input)
+{
+    std::vector<std::string> result;
+
+    for (std::vector<std::string>::const_iterator it = input.begin(); it != input.end(); ++it) 
+    {
+        const std::string s = *it;
+        std::string temp;
+        for (std::string::size_type i = 0; i < s.size(); ++i) 
+        {
+            char c = s[i];
+            if (c == ';') 
+            {
+                if (!temp.empty()) 
+                {
+                    result.push_back(temp);
+                    temp.clear();
+                }
+                result.push_back(";");
+            }
+            else
+                temp += c;
+        }
+        if (!temp.empty())
+            result.push_back(temp);
+    }
+    return result;
+}
+
+
 void Webserv::read_file(void)
 {
     this->config_file.clear();
@@ -101,105 +131,250 @@ void Webserv::read_file(void)
             this->tokens.push_back(parts[i]);
         delete[] parts;
     }
-    // for (size_t i = 0; i < this->tokens.size(); i++)
-    // {
-    //     std::cout << this->tokens[i] << " ";
-    //     if (i == this->tokens.size() - 1)
-    //         std::cout << std::endl;
-    // }
-
-    bool found_server = false;
-    int brackets_flag = 0;
+    if (!checkForBrackets())
+        throw std::runtime_error("Error: Unclosed brackets are inside the config file.");
+    tokens = semicolonFix(tokens);
+    if (!checkSemicolon())
+        throw std::runtime_error("Error: Semicolon not in appropriate place.");
     for (size_t i = 0; i < tokens.size(); i++)
     {
-        if (tokens[i] == "server")
+        if (tokens[i] == "http")
         {
-            found_server = true;
             i++;
             if (tokens[i] != "{")
-                throw std::runtime_error("Error: Expected '{' after server.");
-            brackets_flag = 1;
+                throw std::runtime_error("Error: Expected '{' after http.");
+            // this->brackets.push(tokens[i]);
             i++;
-            Server s = parseServer(i, brackets_flag);
-            this->servers.push_back(s);
+            if (tokens[i] == "server")
+            {
+                i++;
+                if (tokens[i] != "{")
+                    throw std::runtime_error("Error: Expected '{' after server.");
+                // this->brackets.push(tokens[i]);
+                i++;
+                Server s = parseServer(i);
+                this->servers.push_back(s);
+            }
+            else
+                throw std::runtime_error("Error: Server block not found.");
         }
         else
-        {
-            if (!found_server)
-                throw std::runtime_error("Error: 'server' keyword not found.");
-        }
+            throw std::runtime_error("Error: Http context not found.");
     }
 }
 
-Webserv::Server Webserv::parseServer(size_t &i, int &brackets_flag)
+bool Webserv::checkForBrackets(void)
+{
+    for (size_t i = 0; i < tokens.size(); i++)
+    {
+        std::string token = tokens[i];
+        if (token == "{")
+            brackets.push(token);
+        else if (token == "}")
+        {
+            if (brackets.empty())
+                return false;
+            brackets.pop();
+        }
+    }
+    return brackets.empty();
+}
+
+bool Webserv::checkSemicolon(void) const
+{
+    for (size_t i = 1; i < tokens.size(); i++)
+    {
+        if (tokens[i] == ";" && tokens[i - 1] == ";")
+            return false;
+    }
+    return true;
+}
+
+bool Webserv::checkValidPort(const std::string s) const
+{
+    size_t len = s.length();
+
+    if (!len)
+        return false;
+    for (size_t i = 0; i < len; i++)
+        if (!isdigit(s[i]))
+            return false;
+    int p = atoi(s.c_str());
+    if (p < 0 || p > 65535)
+        return false;
+    return true;
+}
+
+bool Webserv::checkServerName(const std::string s) const
+{
+    size_t len = s.length();
+
+    if (!len)
+        return false;
+    if (s != "localhost")
+        return false;
+    return true;
+}
+
+void Webserv::serverDefaultInit(Webserv::Server &server)
+{
+    server.name = "";
+    server.port = -1;
+}
+
+bool Webserv::checkPath(const std::string path) const
+{
+    if (path.empty() || path[0] != '/')
+        return false;
+    for (size_t i = 0; i < path.length(); i++)
+    {
+        if (!isalnum(path[i]) && path[i] != '/' && path[i] != '_' && path[i] != '-' && path[i] != '.')
+            return false;
+    }
+    if (path.find("//") != std::string::npos)
+        return false;
+    if (path.size() > 1 && path[path.size() - 1] == '/' && path[path.size() - 2] == '/')
+        return false;
+    return true;
+}
+
+bool Webserv::checkRoot(const std::string path) const
+{
+    if (path.empty())
+        return false;
+    if (path[0] != '/' && !(path.size() > 1 && path[0] == '.' && path[1] == '/'))
+        return false;
+    return true;
+}
+
+Webserv::Server Webserv::parseServer(size_t &i)
 {
     Server server;
-    static_cast<void>(brackets_flag);
-    while (i < this->tokens.size())
+    serverDefaultInit(server);
+    bool sawListen = false;
+    bool sawServerName = false;
+    bool sawLocation = false;
+
+    for (; i < tokens.size(); i++)
     {
-        if (this->tokens[i] == "listen")
+        if (tokens[i] == "listen")
         {
+            if (sawListen)
+                throw std::runtime_error("Error: Duplicate listen directive.");
+            sawListen = true;
             i++;
-            if (i >= this->tokens.size())
-                throw std::runtime_error("Error: Expected value after 'listen'");
-            
-            // Check if this token ends with semicolon
-            if (this->tokens[i].find(';') == std::string::npos)
-                throw std::runtime_error("Error: 'listen' directive must end with semicolon");
-            
-            // Extract value (remove semicolon)
-            std::string value = this->tokens[i].substr(0, this->tokens[i].length() - 1);
-            
-            if (value.empty())
-                throw std::runtime_error("Error: 'listen' has no value");
-            
-            server.port = atoi(value.c_str());
+            if (tokens[i + 1] != ";")
+                throw std::runtime_error("Error: Expected ';' after port.");
+            std::string s = tokens[i];
+            if (!checkValidPort(s))
+                throw std::runtime_error("Error: Port is invalid.");
+            server.port = atoi(s.c_str());
             i++;
-        }
-        else if (this->tokens[i] == "server_name")
-        {
-            i++;
-            if (i >= this->tokens.size())
-                throw std::runtime_error("Error: Expected value after 'server_name'");
-            
-            bool foundSemicolon = false;
-            
-            // Collect all values until we find semicolon
-            while (i < this->tokens.size())
-            {
-                if (this->tokens[i].find(';') != std::string::npos)
-                {
-                    // This token has the semicolon
-                    std::string lastValue = this->tokens[i].substr(0, this->tokens[i].length() - 1);
-                    
-                    if (!lastValue.empty())
-                        server.names.push_back(lastValue);
-                    
-                    foundSemicolon = true;
-                    i++;
-                    break;
-                }
-                
-                // Regular value without semicolon
-                server.names.push_back(this->tokens[i]);
-                i++;
-            }
-            
-            if (!foundSemicolon)
-                throw std::runtime_error("Error: 'server_name' directive must end with semicolon");
-            
-            if (server.names.empty())
-                throw std::runtime_error("Error: 'server_name' has no values");
-            
-            // Debug print
-            for (size_t k = 0; k < server.names.size(); k++)
-                std::cout << server.names[k] << std::endl;
+            continue;
         }
         else
         {
-            i++; // Move to next token if unknown directive
+            if (!sawListen)
+                throw std::runtime_error("Error: Expected listen directive at top of server block.");
+        }
+        if (tokens[i] == "server_name")
+        {
+            if (sawServerName)
+                throw std::runtime_error("Error: Duplicate server_name directive.");
+            sawServerName = true;
+            i++;
+            if (tokens[i + 1] != ";")
+            throw std::runtime_error("Error: Expected ';' after server name.");
+            std::string s = tokens[i];
+            if (!checkServerName(s))
+                throw std::runtime_error("Error: Server_name should be localhost.");
+            server.name = s;
+            i++;
+            continue;
+        }
+        else
+        {
+            if (!sawServerName)
+                throw std::runtime_error("Error: Expected server_name directive in server block.");
+        }
+        if (tokens[i] == "location")
+        {
+            sawLocation = true;
+            i++;
+            Location location;
+            if (tokens[i] == "{")
+                throw std::runtime_error("Error: Expected path for location block.");
+            if (!checkPath(tokens[i]))
+                throw std::runtime_error("Error: Invalid path for location block.");
+            location.path = tokens[i];
+            i++;
+            if (tokens[i] != "{")
+                throw std::runtime_error("Error: Expected '{' after path.");
+            i++;
+
+            for (; i < tokens.size() && tokens[i] != "}"; i++)
+            {
+                if (tokens[i] == "root")
+                {
+                    i++;
+                    if (tokens[i] == ";")
+                        throw std::runtime_error("Error: Expected a path after root directive.");
+                    if (tokens[i + 1] != ";")
+                        throw std::runtime_error("Error: Expected ';' after root.");
+                    if (!checkRoot(tokens[i])) // khsni mzl nchecki wach dak path 3ndi, hada ghy check syntax
+                        throw std::runtime_error("Error: Invalid path for root directive.");
+                    location.root = tokens[i].substr(0, tokens[i].length() - 1);
+                }
+                else if (tokens[i] == "index")
+                {
+                    i++;
+                    while (i < tokens.size() && tokens[i] != ";")
+                    {
+                        if (tokens[i] == "root" || tokens[i] == "allow_methods" || tokens[i] == "index" || tokens[i] == "autoindex")
+                            throw std::runtime_error("Error: Expected ';' after index.");
+                        location.index.push_back(tokens[i]);
+                        i++;
+                    }
+                }
+                else if (tokens[i] == "allow_methods")
+                {
+                    i++;
+                    if (tokens[i] == ";")
+                        throw std::runtime_error("Error: Expected http methods after allow methods.");
+                    while (i < tokens.size() && tokens[i] != ";")
+                    {
+                        if (tokens[i] != "GET" && tokens[i] != "POST" && tokens[i] != "DELETE" && tokens[i] != "PUT")
+                            throw std::runtime_error("Error: Invalid http method or Expected ';'.");
+                        location.methods.push_back(tokens[i]);
+                        i++;
+                    }
+                }
+                else if (tokens[i] == "autoindex")
+                {
+                    i++;
+                    if (tokens[i] != "on" && tokens[i] != "off")
+                        throw std::runtime_error("Error: Invalid autoindex.");
+                    if (tokens[i + 1] != ";")
+                        throw std::runtime_error("Error: Expected ';' after autoindex.");
+                    tokens[i] == "on" ? location.autoindex = true : location.autoindex = false;
+                }
+                else if (tokens[i] != "root" && tokens[i] != "index" && tokens[i] != "allow_methods" && tokens[i] != "autoindex" && tokens[i] != ";")
+                    throw std::runtime_error("Error: Invalid directive '" + tokens[i] + "' inside location block.");
+            }
+            server.locations.push_back(location);
+        }
+        else
+        {
+            if (!sawLocation)
+                throw std::runtime_error("Error: Expected location block in server block.");
         }
     }
-
     return server;
 }
+
+
+// still need to handle duplicate locations + multiple servers and other edge cases + vector of location struct .
+
+
+// done:
+    // vector of location struct 
