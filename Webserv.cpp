@@ -88,25 +88,26 @@ std::string* Webserv::split(const std::string line)
     return parts;
 }
 
-std::vector<std::string> Webserv::semicolonFix(const std::vector<std::string> input)
+std::vector<std::string> Webserv::semicolonBracketsFix(const std::vector<std::string> input)
 {
     std::vector<std::string> result;
-
     for (std::vector<std::string>::const_iterator it = input.begin(); it != input.end(); ++it) 
     {
         const std::string s = *it;
         std::string temp;
+
         for (std::string::size_type i = 0; i < s.size(); ++i) 
         {
             char c = s[i];
-            if (c == ';') 
+
+            if (c == ';' || c == '{' || c == '}')
             {
                 if (!temp.empty()) 
                 {
                     result.push_back(temp);
                     temp.clear();
                 }
-                result.push_back(";");
+                result.push_back(std::string(1, c));
             }
             else
                 temp += c;
@@ -131,9 +132,9 @@ void Webserv::read_file(void)
             this->tokens.push_back(parts[i]);
         delete[] parts;
     }
+    tokens = semicolonBracketsFix(tokens);
     if (!checkForBrackets())
         throw std::runtime_error("Error: Unclosed brackets are inside the config file.");
-    tokens = semicolonFix(tokens);
     if (!checkSemicolon())
         throw std::runtime_error("Error: Semicolon not in appropriate place.");
     for (size_t i = 0; i < tokens.size(); i++)
@@ -143,14 +144,12 @@ void Webserv::read_file(void)
             i++;
             if (tokens[i] != "{")
                 throw std::runtime_error("Error: Expected '{' after http.");
-            // this->brackets.push(tokens[i]);
             i++;
             if (tokens[i] == "server")
             {
                 i++;
                 if (tokens[i] != "{")
                     throw std::runtime_error("Error: Expected '{' after server.");
-                // this->brackets.push(tokens[i]);
                 i++;
                 Server s = parseServer(i);
                 this->servers.push_back(s);
