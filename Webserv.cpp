@@ -329,7 +329,7 @@ Webserv::Server Webserv::parseServer(size_t &i)
                 throw std::runtime_error("Error: Expected server_name directive in server block.");
         }
         if (tokens[i] != "listen" && tokens[i] != "server_name" && tokens[i] != "location" && tokens[i] != "}")
-            throw std::runtime_error("Error: Unknown directive '" + tokens[i] + "' in server block.");
+            throw std::runtime_error("Error: Unknown directive '" + tokens[i] + "'.");
         if (tokens[i] == "location")
         {
             sawLocation = true;
