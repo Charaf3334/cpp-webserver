@@ -145,20 +145,45 @@ void Webserv::read_file(void)
             if (tokens[i] != "{")
                 throw std::runtime_error("Error: Expected '{' after http.");
             i++;
-            if (tokens[i] == "server")
+            while (i < tokens.size() && tokens[i] != "}")
             {
-                i++;
-                if (tokens[i] != "{")
-                    throw std::runtime_error("Error: Expected '{' after server.");
-                i++;
-                Server s = parseServer(i);
-                this->servers.push_back(s);
+                if (tokens[i] == "server")
+                {
+                    i++;
+                    if (tokens[i] != "{")
+                        throw std::runtime_error("Error: Expected '{' after server.");
+                    i++;
+                    Server s = parseServer(i);
+                    this->servers.push_back(s);
+                }
+                else
+                    throw std::runtime_error("Error: Server block not found.");
             }
-            else
-                throw std::runtime_error("Error: Server block not found.");
         }
         else
             throw std::runtime_error("Error: Http context not found.");
+    }
+
+    // print_data
+    for (size_t i = 0; i < servers.size(); i++)
+    {
+        std::cout << "Listen: " <<  servers[i].port << std::endl;
+        std::cout << "Name: " <<  servers[i].name << std::endl;
+        for (size_t j = 0; j < servers[i].locations.size(); j++)
+        {
+            std::cout << "Path: " << j << " " << servers[i].locations[j].path << std::endl;
+            std::cout << "Root: " << j << " " << servers[i].locations[j].root << std::endl;
+            for (size_t k = 0; k < servers[i].locations[j].index.size(); k++)
+            {
+                std::cout << "Index: " << j << " " << servers[i].locations[j].index[k] << std::endl;
+            }
+            for (size_t k = 0; k < servers[i].locations[j].methods.size(); k++)
+            {
+                std::cout << "Methods: " << j << " " << servers[i].locations[j].methods[k] << std::endl;
+            }
+            std::cout << "Autoindex: " << j << " " << (servers[i].locations[j].autoindex ? "True" : "False") << std::endl;
+        }
+        std::cout << "-------------------------------------------------" << std::endl;
     }
 }
 
@@ -219,6 +244,13 @@ void Webserv::serverDefaultInit(Webserv::Server &server)
 {
     server.name = "";
     server.port = -1;
+}
+
+void Webserv::locationDefaultInit(Location &location)
+{
+    location.autoindex = false;
+    location.path = "";
+    location.root = "";
 }
 
 bool Webserv::checkPath(const std::string path) const
@@ -296,11 +328,18 @@ Webserv::Server Webserv::parseServer(size_t &i)
             if (!sawServerName)
                 throw std::runtime_error("Error: Expected server_name directive in server block.");
         }
+        if (tokens[i] != "listen" && tokens[i] != "server_name" && tokens[i] != "location" && tokens[i] != "}")
+            throw std::runtime_error("Error: Unknown directive '" + tokens[i] + "' in server block.");
         if (tokens[i] == "location")
         {
             sawLocation = true;
+            bool sawRoot = false;
+            bool sawIndex = false;
+            bool sawMethods = false;
+            bool sawAutoIndex = false;
             i++;
             Location location;
+            locationDefaultInit(location);
             if (tokens[i] == "{")
                 throw std::runtime_error("Error: Expected path for location block.");
             if (!checkPath(tokens[i]))
@@ -310,11 +349,16 @@ Webserv::Server Webserv::parseServer(size_t &i)
             if (tokens[i] != "{")
                 throw std::runtime_error("Error: Expected '{' after path.");
             i++;
+            if (tokens[i] == "}" || tokens[i] == ";")
+                throw std::runtime_error("Error: Location block cannot be empty.");
 
             for (; i < tokens.size() && tokens[i] != "}"; i++)
             {
                 if (tokens[i] == "root")
                 {
+                    if (sawRoot)
+                        throw std::runtime_error("Error: Duplicate root directive.");
+                    sawRoot = true;
                     i++;
                     if (tokens[i] == ";")
                         throw std::runtime_error("Error: Expected a path after root directive.");
@@ -322,10 +366,13 @@ Webserv::Server Webserv::parseServer(size_t &i)
                         throw std::runtime_error("Error: Expected ';' after root.");
                     if (!checkRoot(tokens[i])) // khsni mzl nchecki wach dak path 3ndi, hada ghy check syntax
                         throw std::runtime_error("Error: Invalid path for root directive.");
-                    location.root = tokens[i].substr(0, tokens[i].length() - 1);
+                    location.root = tokens[i];
                 }
                 else if (tokens[i] == "index")
                 {
+                    if (sawIndex)
+                        throw std::runtime_error("Error: Duplicate index directive.");
+                    sawIndex = true;
                     i++;
                     while (i < tokens.size() && tokens[i] != ";")
                     {
@@ -337,6 +384,9 @@ Webserv::Server Webserv::parseServer(size_t &i)
                 }
                 else if (tokens[i] == "allow_methods")
                 {
+                    if (sawMethods)
+                        throw std::runtime_error("Error: Duplicate allow_methods directive.");
+                    sawMethods = true;
                     i++;
                     if (tokens[i] == ";")
                         throw std::runtime_error("Error: Expected http methods after allow methods.");
@@ -350,6 +400,9 @@ Webserv::Server Webserv::parseServer(size_t &i)
                 }
                 else if (tokens[i] == "autoindex")
                 {
+                    if (sawAutoIndex)
+                        throw std::runtime_error("Error: Duplicate autoindex directive.");
+                    sawAutoIndex = true;
                     i++;
                     if (tokens[i] != "on" && tokens[i] != "off")
                         throw std::runtime_error("Error: Invalid autoindex.");
@@ -367,13 +420,21 @@ Webserv::Server Webserv::parseServer(size_t &i)
             if (!sawLocation)
                 throw std::runtime_error("Error: Expected location block in server block.");
         }
+        if (tokens[i + 1] == "server")
+        {
+            i++;
+            break;
+        }
     }
     return server;
 }
 
 
-// still need to handle duplicate locations + multiple servers and other edge cases + vector of location struct .
+// khsni mzl nchof subject lakant chi haja tzad f config file w ha7na salina hh
 
 
 // done:
-    // vector of location struct 
+    // vector of location struct
+    // multiple servers
+    // duplicate locations
+    // errors

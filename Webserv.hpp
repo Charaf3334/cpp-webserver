@@ -42,6 +42,7 @@ class Webserv
         bool checkValidPort(const std::string s) const;
         bool checkServerName(const std::string s) const;
         void serverDefaultInit(Webserv::Server &server);
+        void locationDefaultInit(Location &location);
         bool checkPath(const std::string path) const;
         bool checkRoot(const std::string path) const;
         bool checkForBrackets(void);
