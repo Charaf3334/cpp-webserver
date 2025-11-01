@@ -163,6 +163,8 @@ void Webserv::read_file(void)
         else
             throw std::runtime_error("Error: Http context not found.");
     }
+    if (checkDuplicatePorts())
+        throw std::runtime_error("Error: Multiple servers listen to same ports.");
 
     // print_data
     for (size_t i = 0; i < servers.size(); i++)
@@ -185,6 +187,14 @@ void Webserv::read_file(void)
         }
         std::cout << "-------------------------------------------------" << std::endl;
     }
+}
+
+bool Webserv::checkDuplicatePorts(void) const
+{
+    std::set<int> Set;
+    for (size_t i = 0; i < servers.size(); i++) 
+        Set.insert(servers[i].port);
+    return Set.size() != servers.size();
 }
 
 bool Webserv::checkForBrackets(void)

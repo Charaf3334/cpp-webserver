@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <iterator>
 #include <cstdlib>
+#include <set>
 
 class Webserv
 {
@@ -48,6 +49,7 @@ class Webserv
         bool checkPath(const std::string path) const;
         bool checkRoot(const std::string path) const;
         bool checkForBrackets(void);
+        bool checkDuplicatePorts(void) const;
         std::vector<std::string> semicolonBracketsFix(const std::vector<std::string> input);
     public:
         Webserv();
