@@ -285,11 +285,14 @@ Webserv::Server Webserv::parseServer(size_t &i)
     bool sawListen = false;
     bool sawServerName = false;
     bool sawLocation = false;
+    int depth = 1;
 
     for (; i < tokens.size(); i++)
     {
         if (tokens[i] == "listen")
         {
+            if (depth != 1)
+                throw std::runtime_error("Error: Listen is not inside server block.");
             if (sawListen)
                 throw std::runtime_error("Error: Duplicate listen directive.");
             sawListen = true;
@@ -310,6 +313,8 @@ Webserv::Server Webserv::parseServer(size_t &i)
         }
         if (tokens[i] == "server_name")
         {
+            if (depth != 1)
+                throw std::runtime_error("Error: Server_name is not inside server block.");
             if (sawServerName)
                 throw std::runtime_error("Error: Duplicate server_name directive.");
             sawServerName = true;
@@ -332,6 +337,8 @@ Webserv::Server Webserv::parseServer(size_t &i)
             throw std::runtime_error("Error: Unknown directive '" + tokens[i] + "'.");
         if (tokens[i] == "location")
         {
+            if (depth != 1)
+                throw std::runtime_error("Error: Location is not inside server block.");
             sawLocation = true;
             bool sawRoot = false;
             bool sawIndex = false;
@@ -348,6 +355,7 @@ Webserv::Server Webserv::parseServer(size_t &i)
             i++;
             if (tokens[i] != "{")
                 throw std::runtime_error("Error: Expected '{' after path.");
+            depth++;
             i++;
             if (tokens[i] == "}" || tokens[i] == ";")
                 throw std::runtime_error("Error: Location block cannot be empty.");
@@ -415,6 +423,10 @@ Webserv::Server Webserv::parseServer(size_t &i)
                 else if (tokens[i] != "root" && tokens[i] != "index" && tokens[i] != "allow_methods" && tokens[i] != "autoindex" && tokens[i] != ";")
                     throw std::runtime_error("Error: Invalid directive '" + tokens[i] + "' inside location block.");
             }
+            if (tokens[i] == "}")
+                depth--;
+            if (tokens[i + 1] == "}")
+                depth--;
             server.locations.push_back(location);
         }
         else
