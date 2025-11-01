@@ -50,6 +50,7 @@ class Webserv
         bool checkRoot(const std::string path) const;
         bool checkForBrackets(void);
         bool checkDuplicatePorts(void) const;
+        bool checkDuplicatePaths(void);
         std::vector<std::string> semicolonBracketsFix(const std::vector<std::string> input);
     public:
         Webserv();

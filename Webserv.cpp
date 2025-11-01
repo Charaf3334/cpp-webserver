@@ -165,6 +165,8 @@ void Webserv::read_file(void)
     }
     if (checkDuplicatePorts())
         throw std::runtime_error("Error: Multiple servers listen to same ports.");
+    if (checkDuplicatePaths())
+        throw std::runtime_error("Error: Multiple paths");
 
     // print_data
     for (size_t i = 0; i < servers.size(); i++)
@@ -195,6 +197,20 @@ bool Webserv::checkDuplicatePorts(void) const
     for (size_t i = 0; i < servers.size(); i++) 
         Set.insert(servers[i].port);
     return Set.size() != servers.size();
+}
+
+bool Webserv::checkDuplicatePaths(void)
+{
+    std::set<std::string> Set;
+    for (size_t i = 0; i < servers.size(); i++) 
+    {
+        Set.clear();
+        for (size_t j = 0; j < servers[i].locations.size(); j++)
+            Set.insert(servers[i].locations[j].path);
+        if (Set.size() != servers[i].locations.size())
+            return true;
+    }
+    return false;
 }
 
 bool Webserv::checkForBrackets(void)
@@ -459,6 +475,5 @@ void Webserv::parseLocation(size_t &i, Webserv::Server &server, int &depth, bool
 
 
 // handle missing of required fields and errors to throw (ie. root and index and so on)
-// also duplicates in location ex i have both location paths point to /, or both servers listen at same port.
 
 // khsni mzl nchof subject lakant chi haja tzad f config file w ha7na salina hh
