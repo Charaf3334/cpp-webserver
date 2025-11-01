@@ -444,6 +444,8 @@ Webserv::Server Webserv::parseServer(size_t &i)
 }
 
 
+// handle missing of required fields and errors to throw (ie. root and index and so on)
+
 // khsni mzl nchof subject lakant chi haja tzad f config file w ha7na salina hh
 
 // done:
