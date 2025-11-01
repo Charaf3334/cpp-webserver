@@ -36,7 +36,8 @@ class Webserv
         
         Server parseServer(size_t &i);
         void parseLocation(size_t &i, Webserv::Server &server, int &depth, bool &sawLocation);
-        
+
+        std::string* split(const std::string line);
         size_t countParts(const std::string line) const;
         bool isFileEmpty(void);
         bool checkSemicolon(void) const;
@@ -55,7 +56,6 @@ class Webserv
         Webserv& operator=(const Webserv &theOtherObject);
         ~Webserv();
 
-        std::string* split(const std::string line);
         void read_file(void);
 };
 
