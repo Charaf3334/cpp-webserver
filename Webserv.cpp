@@ -336,99 +336,7 @@ Webserv::Server Webserv::parseServer(size_t &i)
         if (tokens[i] != "listen" && tokens[i] != "server_name" && tokens[i] != "location" && tokens[i] != "}")
             throw std::runtime_error("Error: Unknown directive '" + tokens[i] + "'.");
         if (tokens[i] == "location")
-        {
-            if (depth != 1)
-                throw std::runtime_error("Error: Location is not inside server block.");
-            sawLocation = true;
-            bool sawRoot = false;
-            bool sawIndex = false;
-            bool sawMethods = false;
-            bool sawAutoIndex = false;
-            i++;
-            Location location;
-            locationDefaultInit(location);
-            if (tokens[i] == "{")
-                throw std::runtime_error("Error: Expected path for location block.");
-            if (!checkPath(tokens[i]))
-                throw std::runtime_error("Error: Invalid path for location block.");
-            location.path = tokens[i];
-            i++;
-            if (tokens[i] != "{")
-                throw std::runtime_error("Error: Expected '{' after path.");
-            depth++;
-            i++;
-            if (tokens[i] == "}" || tokens[i] == ";")
-                throw std::runtime_error("Error: Location block cannot be empty.");
-
-            for (; i < tokens.size() && tokens[i] != "}"; i++)
-            {
-                if (tokens[i] == "root")
-                {
-                    if (sawRoot)
-                        throw std::runtime_error("Error: Duplicate root directive.");
-                    sawRoot = true;
-                    i++;
-                    if (tokens[i] == ";")
-                        throw std::runtime_error("Error: Expected a path after root directive.");
-                    if (tokens[i + 1] != ";")
-                        throw std::runtime_error("Error: Expected ';' after root.");
-                    if (!checkRoot(tokens[i])) // khsni mzl nchecki wach dak path 3ndi, hada ghy check syntax
-                        throw std::runtime_error("Error: Invalid path for root directive.");
-                    location.root = tokens[i];
-                }
-                else if (tokens[i] == "index")
-                {
-                    if (sawIndex)
-                        throw std::runtime_error("Error: Duplicate index directive.");
-                    sawIndex = true;
-                    i++;
-                    if (tokens[i] == ";")
-                        throw std::runtime_error("Error: Expected files at index directive.");
-                    while (i < tokens.size() && tokens[i] != ";")
-                    {
-                        if (tokens[i] == "root" || tokens[i] == "allow_methods" || tokens[i] == "index" || tokens[i] == "autoindex" || tokens[i] == "}")
-                            throw std::runtime_error("Error: Expected ';' after index.");
-                        location.index.push_back(tokens[i]);
-                        i++;
-                    }
-                }
-                else if (tokens[i] == "allow_methods")
-                {
-                    if (sawMethods)
-                        throw std::runtime_error("Error: Duplicate allow_methods directive.");
-                    sawMethods = true;
-                    i++;
-                    if (tokens[i] == ";")
-                        throw std::runtime_error("Error: Expected http methods after allow methods.");
-                    while (i < tokens.size() && tokens[i] != ";")
-                    {
-                        if (tokens[i] != "GET" && tokens[i] != "POST" && tokens[i] != "DELETE" && tokens[i] != "PUT")
-                            throw std::runtime_error("Error: Invalid http method or Expected ';'.");
-                        location.methods.push_back(tokens[i]);
-                        i++;
-                    }
-                }
-                else if (tokens[i] == "autoindex")
-                {
-                    if (sawAutoIndex)
-                        throw std::runtime_error("Error: Duplicate autoindex directive.");
-                    sawAutoIndex = true;
-                    i++;
-                    if (tokens[i] != "on" && tokens[i] != "off")
-                        throw std::runtime_error("Error: Invalid autoindex.");
-                    if (tokens[i + 1] != ";")
-                        throw std::runtime_error("Error: Expected ';' after autoindex.");
-                    tokens[i] == "on" ? location.autoindex = true : location.autoindex = false;
-                }
-                else if (tokens[i] != "root" && tokens[i] != "index" && tokens[i] != "allow_methods" && tokens[i] != "autoindex" && tokens[i] != ";")
-                    throw std::runtime_error("Error: Invalid directive '" + tokens[i] + "' inside location block.");
-            }
-            if (tokens[i] == "}")
-                depth--;
-            if (tokens[i + 1] == "}")
-                depth--;
-            server.locations.push_back(location);
-        }
+            parseLocation(i, server, depth, sawLocation);
         else
         {
             if (!sawLocation)
@@ -444,12 +352,103 @@ Webserv::Server Webserv::parseServer(size_t &i)
 }
 
 
+void Webserv::parseLocation(size_t &i, Webserv::Server &server, int &depth, bool &sawLocation)
+{
+    if (depth != 1)
+        throw std::runtime_error("Error: Location is not inside server block.");
+    sawLocation = true;
+    bool sawRoot = false;
+    bool sawIndex = false;
+    bool sawMethods = false;
+    bool sawAutoIndex = false;
+    i++;
+    Location location;
+    locationDefaultInit(location);
+    if (tokens[i] == "{")
+        throw std::runtime_error("Error: Expected path for location block.");
+    if (!checkPath(tokens[i]))
+        throw std::runtime_error("Error: Invalid path for location block.");
+    location.path = tokens[i];
+    i++;
+    if (tokens[i] != "{")
+        throw std::runtime_error("Error: Expected '{' after path.");
+    depth++;
+    i++;
+    if (tokens[i] == "}" || tokens[i] == ";")
+        throw std::runtime_error("Error: Location block cannot be empty.");
+
+    for (; i < tokens.size() && tokens[i] != "}"; i++)
+    {
+        if (tokens[i] == "root")
+        {
+            if (sawRoot)
+                throw std::runtime_error("Error: Duplicate root directive.");
+            sawRoot = true;
+            i++;
+            if (tokens[i] == ";")
+                throw std::runtime_error("Error: Expected a path after root directive.");
+            if (tokens[i + 1] != ";")
+                throw std::runtime_error("Error: Expected ';' after root.");
+            if (!checkRoot(tokens[i])) // khsni mzl nchecki wach dak path 3ndi, hada ghy check syntax
+                throw std::runtime_error("Error: Invalid path for root directive.");
+            location.root = tokens[i];
+        }
+        else if (tokens[i] == "index")
+        {
+            if (sawIndex)
+                throw std::runtime_error("Error: Duplicate index directive.");
+            sawIndex = true;
+            i++;
+            if (tokens[i] == ";")
+                throw std::runtime_error("Error: Expected files at index directive.");
+            while (i < tokens.size() && tokens[i] != ";")
+            {
+                if (tokens[i] == "root" || tokens[i] == "allow_methods" || tokens[i] == "index" || tokens[i] == "autoindex" || tokens[i] == "}")
+                    throw std::runtime_error("Error: Expected ';' after index.");
+                location.index.push_back(tokens[i]);
+                i++;
+            }
+        }
+        else if (tokens[i] == "allow_methods")
+        {
+            if (sawMethods)
+                throw std::runtime_error("Error: Duplicate allow_methods directive.");
+            sawMethods = true;
+            i++;
+            if (tokens[i] == ";")
+                throw std::runtime_error("Error: Expected http methods after allow methods.");
+            while (i < tokens.size() && tokens[i] != ";")
+            {
+                if (tokens[i] != "GET" && tokens[i] != "POST" && tokens[i] != "DELETE" && tokens[i] != "PUT")
+                    throw std::runtime_error("Error: Invalid http method or Expected ';'.");
+                location.methods.push_back(tokens[i]);
+                i++;
+            }
+        }
+        else if (tokens[i] == "autoindex")
+        {
+            if (sawAutoIndex)
+                throw std::runtime_error("Error: Duplicate autoindex directive.");
+            sawAutoIndex = true;
+            i++;
+            if (tokens[i] != "on" && tokens[i] != "off")
+                throw std::runtime_error("Error: Invalid autoindex.");
+            if (tokens[i + 1] != ";")
+                throw std::runtime_error("Error: Expected ';' after autoindex.");
+            tokens[i] == "on" ? location.autoindex = true : location.autoindex = false;
+        }
+        else if (tokens[i] != "root" && tokens[i] != "index" && tokens[i] != "allow_methods" && tokens[i] != "autoindex" && tokens[i] != ";")
+            throw std::runtime_error("Error: Invalid directive '" + tokens[i] + "' inside location block.");
+    }
+    if (tokens[i] == "}")
+        depth--;
+    if (tokens[i + 1] == "}")
+        depth--;
+    server.locations.push_back(location);
+}
+
+
 // handle missing of required fields and errors to throw (ie. root and index and so on)
+// also duplicates in location ex i have both location paths point to /, or both servers listen at same port.
 
 // khsni mzl nchof subject lakant chi haja tzad f config file w ha7na salina hh
-
-// done:
-    // vector of location struct
-    // multiple servers
-    // duplicate locations
-    // errors
