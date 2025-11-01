@@ -9,6 +9,8 @@ Webserv::Webserv(const std::string config_file_path) : config_file(config_file_p
 {
     if (!config_file.is_open())
         throw std::runtime_error("Error: Problem occured while opening the file.");
+    if (!checkFileExtension(config_file_path))
+        throw std::runtime_error("Error: Unknown file extension, use '.conf' files.");
     if (this->isFileEmpty())
         throw std::runtime_error("Error: Config file is empty.");
 }
@@ -42,6 +44,17 @@ bool Webserv::isFileEmpty(void)
             return false;
     }
     return true;
+}
+
+bool Webserv::checkFileExtension(const std::string path) const
+{
+    size_t dot = path.rfind('.');
+    const std::string extension = ".conf";
+
+    if (dot == std::string::npos || dot == 0)
+        return false;
+    std::string ext = path.substr(dot);
+    return ext == extension;
 }
 
 size_t Webserv::countParts(const std::string line) const
@@ -166,7 +179,7 @@ void Webserv::read_file(void)
     if (checkDuplicatePorts())
         throw std::runtime_error("Error: Multiple servers listen to same ports.");
     if (checkDuplicatePaths())
-        throw std::runtime_error("Error: Multiple paths");
+        throw std::runtime_error("Error: Server has the same location path multiple times.");
 
     // print_data
     for (size_t i = 0; i < servers.size(); i++)
@@ -249,7 +262,7 @@ bool Webserv::checkValidPort(const std::string s) const
     for (size_t i = 0; i < len; i++)
         if (!isdigit(s[i]))
             return false;
-    int p = atoi(s.c_str());
+    long p = atol(s.c_str());
     if (p < 0 || p > 65535)
         return false;
     return true;
@@ -346,7 +359,7 @@ Webserv::Server Webserv::parseServer(size_t &i)
             sawServerName = true;
             i++;
             if (tokens[i + 1] != ";")
-            throw std::runtime_error("Error: Expected ';' after server name.");
+                throw std::runtime_error("Error: Expected ';' after server name.");
             std::string s = tokens[i];
             if (!checkServerName(s))
                 throw std::runtime_error("Error: Server_name should be localhost.");
@@ -445,7 +458,7 @@ void Webserv::parseLocation(size_t &i, Webserv::Server &server, int &depth, bool
                 throw std::runtime_error("Error: Expected http methods after allow methods.");
             while (i < tokens.size() && tokens[i] != ";")
             {
-                if (tokens[i] != "GET" && tokens[i] != "POST" && tokens[i] != "DELETE" && tokens[i] != "PUT")
+                if (tokens[i] != "GET" && tokens[i] != "POST" && tokens[i] != "DELETE")
                     throw std::runtime_error("Error: Invalid http method or Expected ';'.");
                 location.methods.push_back(tokens[i]);
                 i++;
