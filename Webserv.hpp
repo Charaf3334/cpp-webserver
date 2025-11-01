@@ -14,8 +14,6 @@
 class Webserv
 {
     private:
-        std::map<std::string, std::vector<std::string> > Data; // hadi ghaliban athyd
-
         struct Location
         {
             std::string path;

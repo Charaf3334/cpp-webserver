@@ -15,14 +15,14 @@ Webserv::Webserv(const std::string config_file_path) : config_file(config_file_p
 
 Webserv::Webserv(const Webserv &theOtherObject)
 {
-    this->Data = theOtherObject.Data;
+    static_cast<void>(theOtherObject);
 }
 
 Webserv& Webserv::operator=(const Webserv &theOtherObject)
 {
     if (this != &theOtherObject)
     {
-        this->Data = theOtherObject.Data;
+        static_cast<void>(theOtherObject);
     }
     return *this;
 }
@@ -374,9 +374,11 @@ Webserv::Server Webserv::parseServer(size_t &i)
                         throw std::runtime_error("Error: Duplicate index directive.");
                     sawIndex = true;
                     i++;
+                    if (tokens[i] == ";")
+                        throw std::runtime_error("Error: Expected files at index directive.");
                     while (i < tokens.size() && tokens[i] != ";")
                     {
-                        if (tokens[i] == "root" || tokens[i] == "allow_methods" || tokens[i] == "index" || tokens[i] == "autoindex")
+                        if (tokens[i] == "root" || tokens[i] == "allow_methods" || tokens[i] == "index" || tokens[i] == "autoindex" || tokens[i] == "}")
                             throw std::runtime_error("Error: Expected ';' after index.");
                         location.index.push_back(tokens[i]);
                         i++;
@@ -420,7 +422,7 @@ Webserv::Server Webserv::parseServer(size_t &i)
             if (!sawLocation)
                 throw std::runtime_error("Error: Expected location block in server block.");
         }
-        if (tokens[i + 1] == "server")
+        if (i + 1 < tokens.size() && tokens[i + 1] == "server")
         {
             i++;
             break;
@@ -431,7 +433,6 @@ Webserv::Server Webserv::parseServer(size_t &i)
 
 
 // khsni mzl nchof subject lakant chi haja tzad f config file w ha7na salina hh
-
 
 // done:
     // vector of location struct

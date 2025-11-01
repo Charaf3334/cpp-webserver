@@ -17,12 +17,5 @@ int main(int ac, char **av)
         std::cerr << e.what() << std::endl;
         return 1;
     }
-
-    // parsing dyal conf file.
-    // std::string line;
-    // while (std::getline(config_file, line))
-    // {
-    //     std::cout << line << std::endl;
-    // }
-
+    return 0;
 }
