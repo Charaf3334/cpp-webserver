@@ -488,5 +488,6 @@ void Webserv::parseLocation(size_t &i, Webserv::Server &server, int &depth, bool
 
 
 // handle missing of required fields and errors to throw (ie. root and index and so on)
+// handle when no config file is passed as parameter, should work with a default one present in some PATH
 
 // khsni mzl nchof subject lakant chi haja tzad f config file w ha7na salina hh
