@@ -152,12 +152,46 @@ void Webserv::read_file(void)
         throw std::runtime_error("Error: Semicolon not in appropriate place.");
     for (size_t i = 0; i < tokens.size(); i++)
     {
+        bool bodySizeFlag = false;
         if (tokens[i] == "http")
         {
             i++;
             if (tokens[i] != "{")
                 throw std::runtime_error("Error: Expected '{' after http.");
             i++;
+            if (tokens[i] != "error_pages")
+                throw std::runtime_error("Error: Expected error_pages after http.");
+            i++;
+            if (tokens[i] == ";")
+                throw std::runtime_error("Error: No error pages are provided.");
+            while (i < tokens.size() && (tokens[i] != ";" && tokens[i] != "client_max_body_size" && tokens[i] != "server"))
+            {
+                if (!checkRoot(tokens[i]))
+                    throw std::runtime_error("Error: " + tokens[i] + " not a valid path for error_pages.");
+                error_pages.push_back(tokens[i++]);
+            }
+            i++;
+            if (tokens[i] != "server" && tokens[i] != "client_max_body_size")
+                throw std::runtime_error("Error: Expected ';' after error_pages.");
+            if (tokens[i] == "client_max_body_size")
+            {
+                i++;
+                if (tokens[i] == ";")
+                    throw std::runtime_error("Error: Empty client_max_body_size.");
+                if (tokens[i + 1] != ";")
+                    throw std::runtime_error("Error: Expected ';' after client_max_body_size or many values provided.");
+                if (!checkMaxBodySize(tokens[i]))
+                    throw std::runtime_error("Error: Invalid value for client_max_body_size.");
+                bodySizeFlag = true;
+                client_max_body_size = tokens[i];
+            }
+            if (bodySizeFlag)
+            {
+                i++;
+                if (tokens[i] != ";")
+                    throw std::runtime_error("Error: Expected ';' after client_max_body_size.");
+                i++;
+            }
             while (i < tokens.size() && tokens[i] != "}")
             {
                 if (tokens[i] == "server")
@@ -182,10 +216,13 @@ void Webserv::read_file(void)
         throw std::runtime_error("Error: Server has the same location path multiple times.");
 
     // print_data
+    for (size_t i = 0; i < error_pages.size(); i++)
+        std::cout << "Error_pages: " << error_pages[i] << std::endl;
+    std::cout << "MAX_CLIENT_BODY_SIZE: " << (client_max_body_size.empty() ? "Empty" : client_max_body_size) << std::endl;
     for (size_t i = 0; i < servers.size(); i++)
     {
-        std::cout << "Listen: " <<  servers[i].port << std::endl;
-        std::cout << "Name: " <<  servers[i].name << std::endl;
+        std::cout << "Listen: " << servers[i].ip_address <<  ":" << servers[i].port << std::endl;
+        // std::cout << "Name: " <<  servers[i].name << std::endl;
         for (size_t j = 0; j < servers[i].locations.size(); j++)
         {
             std::cout << "Path: " << j << " " << servers[i].locations[j].path << std::endl;
@@ -204,12 +241,38 @@ void Webserv::read_file(void)
     }
 }
 
+bool Webserv::checkMaxBodySize(const std::string value)
+{
+    if (value.empty())
+        return false;
+    if (value[0] == 'M')
+        return false;
+    size_t idx = value.find('M');
+    if (idx == std::string::npos || idx != value.size() - 1)
+        return false;
+    int count = std::count(value.begin(), value.end(), 'M');
+    if (count != 1)
+        return false;
+    for (size_t i = 0; i < value.size() - 1; i++)
+    {
+        if (!isdigit(value[i]))
+            return false;
+    }
+    return true;
+}
+
 bool Webserv::checkDuplicatePorts(void) const
 {
-    std::set<int> Set;
-    for (size_t i = 0; i < servers.size(); i++) 
-        Set.insert(servers[i].port);
-    return Set.size() != servers.size();
+    std::map<std::string, int> hashMap;
+    for (size_t i = 0; i < servers.size(); i++)
+    {
+        std::map<std::string, int>::iterator found = hashMap.find(servers[i].ip_address);
+        if (found == hashMap.end())
+            hashMap[servers[i].ip_address] = servers[i].port;
+        else if (found->second == servers[i].port)
+            return true;
+    }
+    return false;
 }
 
 bool Webserv::checkDuplicatePaths(void)
@@ -253,17 +316,85 @@ bool Webserv::checkSemicolon(void) const
     return true;
 }
 
-bool Webserv::checkValidPort(const std::string s) const
+std::string Webserv::convertHostToIp(const std::string host)
+{
+    struct addrinfo hints;
+    struct addrinfo *res = NULL;
+
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_flags = AI_PASSIVE;
+
+    int status = getaddrinfo(host.c_str(), NULL, &hints, &res);
+    if (status != 0 || res == NULL)
+        throw std::runtime_error("Error: Listening address is invalid.");
+
+    char ip_string[INET_ADDRSTRLEN];
+    struct sockaddr_in *ipv4 = (struct sockaddr_in *)res->ai_addr;
+    inet_ntop(AF_INET, &(ipv4->sin_addr), ip_string, sizeof(ip_string));
+
+    freeaddrinfo(res);
+    return std::string(ip_string);
+}
+
+bool Webserv::checkHost(const std::string host, bool &isHost) const
+{
+    isHost = true;
+    if (host.empty() || host.length() > 253)
+        return false;
+    int labelLength = 0;
+
+    for (size_t i = 0; i < host.length(); i++)
+    {
+        char c = host[i];
+        if (c == '.')
+        {
+            if (labelLength == 0 || labelLength > 63)
+                return false;
+            labelLength = 0;
+            continue;
+        }
+        if (!(std::isalnum(c) || c == '-'))
+            return false;
+        if ((labelLength == 0 && c == '-') || (i + 1 < host.length() && host[i + 1] == '.' && c == '-'))
+            return false;
+        labelLength++;
+    }
+    if (labelLength == 0 || labelLength > 63)
+        return false;
+    return true;
+}
+
+bool Webserv::isValidIp(std::string ip) const
+{
+    struct in_addr ipv4;
+    if (inet_pton(AF_INET, ip.c_str(), &ipv4) == 1)
+        return true;
+    return false;
+}
+
+bool Webserv::checkValidListen(const std::string s, bool &isHost) const
 {
     size_t len = s.length();
 
     if (!len)
         return false;
-    for (size_t i = 0; i < len; i++)
-        if (!isdigit(s[i]))
+    size_t idx = s.find(':');
+    if (idx == std::string::npos)
+        return false;
+    int count = std::count(s.begin(), s.end(), ':');
+    if (count != 1)
+        return false;
+    std::string ip = s.substr(0, idx);
+    std::string p = s.substr(idx + 1);
+    for (size_t i = 0; i < p.length(); i++)
+        if (!isdigit(p[i]))
             return false;
-    long p = atol(s.c_str());
-    if (p < 0 || p > 65535)
+    long port = atol(p.c_str());
+    if (!isValidIp(ip) && !checkHost(ip, isHost))
+        return false;
+    if (port < 0 || port > 65535)
         return false;
     return true;
 }
@@ -322,9 +453,10 @@ Webserv::Server Webserv::parseServer(size_t &i)
     Server server;
     serverDefaultInit(server);
     bool sawListen = false;
-    bool sawServerName = false;
+    // bool sawServerName = false;
     bool sawLocation = false;
     int depth = 1;
+    bool isHost = false;
 
     for (; i < tokens.size(); i++)
     {
@@ -337,11 +469,15 @@ Webserv::Server Webserv::parseServer(size_t &i)
             sawListen = true;
             i++;
             if (tokens[i + 1] != ";")
-                throw std::runtime_error("Error: Expected ';' after port.");
+                throw std::runtime_error("Error: Expected ';' after interface:port.");
             std::string s = tokens[i];
-            if (!checkValidPort(s))
-                throw std::runtime_error("Error: Port is invalid.");
-            server.port = atoi(s.c_str());
+            if (!checkValidListen(s, isHost))
+                    throw std::runtime_error("Error: Listening address is invalid.");
+            server.port = atoi(s.substr(s.find(':') + 1).c_str());
+            if (isHost)
+                server.ip_address = convertHostToIp(s.substr(0, s.find(':')));
+            else
+                server.ip_address = s.substr(0, s.find(':'));
             i++;
             continue;
         }
@@ -350,28 +486,28 @@ Webserv::Server Webserv::parseServer(size_t &i)
             if (!sawListen)
                 throw std::runtime_error("Error: Expected listen directive at top of server block.");
         }
-        if (tokens[i] == "server_name")
-        {
-            if (depth != 1)
-                throw std::runtime_error("Error: Server_name is not inside server block.");
-            if (sawServerName)
-                throw std::runtime_error("Error: Duplicate server_name directive.");
-            sawServerName = true;
-            i++;
-            if (tokens[i + 1] != ";")
-                throw std::runtime_error("Error: Expected ';' after server name.");
-            std::string s = tokens[i];
-            if (!checkServerName(s))
-                throw std::runtime_error("Error: Server_name should be localhost.");
-            server.name = s;
-            i++;
-            continue;
-        }
-        else
-        {
-            if (!sawServerName)
-                throw std::runtime_error("Error: Expected server_name directive in server block.");
-        }
+        // if (tokens[i] == "server_name")
+        // {
+        //     if (depth != 1)
+        //         throw std::runtime_error("Error: Server_name is not inside server block.");
+        //     if (sawServerName)
+        //         throw std::runtime_error("Error: Duplicate server_name directive.");
+        //     sawServerName = true;
+        //     i++;
+        //     if (tokens[i + 1] != ";")
+        //         throw std::runtime_error("Error: Expected ';' after server name.");
+        //     std::string s = tokens[i];
+        //     if (!checkServerName(s))
+        //         throw std::runtime_error("Error: Server_name should be localhost.");
+        //     server.name = s;
+        //     i++;
+        //     continue;
+        // }
+        // else
+        // {
+        //     if (!sawServerName)
+        //         throw std::runtime_error("Error: Expected server_name directive in server block.");
+        // }
         if (tokens[i] != "listen" && tokens[i] != "server_name" && tokens[i] != "location" && tokens[i] != "}")
             throw std::runtime_error("Error: Unknown directive '" + tokens[i] + "'.");
         if (tokens[i] == "location")
@@ -479,6 +615,8 @@ void Webserv::parseLocation(size_t &i, Webserv::Server &server, int &depth, bool
         else if (tokens[i] != "root" && tokens[i] != "index" && tokens[i] != "allow_methods" && tokens[i] != "autoindex" && tokens[i] != ";")
             throw std::runtime_error("Error: Invalid directive '" + tokens[i] + "' inside location block.");
     }
+    if (!sawRoot)
+        throw std::runtime_error("Error: Missing root inside location.");
     if (tokens[i] == "}")
         depth--;
     if (tokens[i + 1] == "}")
@@ -491,3 +629,14 @@ void Webserv::parseLocation(size_t &i, Webserv::Server &server, int &depth, bool
 // handle when no config file is passed as parameter, should work with a default one present in some PATH
 
 // khsni mzl nchof subject lakant chi haja tzad f config file w ha7na salina hh
+
+
+// to do:
+    // server_name khso yt7yd wa9ila ✅
+    // its okay for two servers to listen to same port mais khs ykon 3ndhum different virtual host name (aka server name), mais 7na mo7al ndiroha ✅
+    // fix listen syntax (listen 127.0.0.1:8080) ✅
+    // nginx allows multiple same location, mais kayoverridi lakano 2 /api aykhdm b akhir whda. ❌
+    // check for all directives and their behavior using nginx ❌
+
+    // content-type will be stored as std::map (extension, content-type) ❌
+    // status codes and their messages will be stored as std::map (code, message) ❌

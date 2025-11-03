@@ -11,6 +11,10 @@
 #include <iterator>
 #include <cstdlib>
 #include <set>
+#include <sstream>
+#include <arpa/inet.h>
+#include <netdb.h>
+#include <cstring>
 
 class Webserv
 {
@@ -25,6 +29,7 @@ class Webserv
         };
         struct Server
         {
+            std::string ip_address;
             int port;
             std::string name;
             std::vector<Location> locations; 
@@ -33,6 +38,8 @@ class Webserv
         std::ifstream config_file;
         std::vector<std::string> tokens;
         std::vector<Webserv::Server> servers;
+        std::vector<std::string> error_pages;
+        std::string client_max_body_size;
         std::stack<std::string> brackets;
         
         Server parseServer(size_t &i);
@@ -42,7 +49,10 @@ class Webserv
         size_t countParts(const std::string line) const;
         bool isFileEmpty(void);
         bool checkSemicolon(void) const;
-        bool checkValidPort(const std::string s) const;
+        bool checkValidListen(const std::string s, bool &isHost) const;
+        bool isValidIp(const std::string ip) const;
+        bool checkHost(const std::string host, bool &isHost) const;
+        std::string convertHostToIp(const std::string host); 
         bool checkServerName(const std::string s) const;
         void serverDefaultInit(Webserv::Server &server);
         void locationDefaultInit(Location &location);
@@ -52,6 +62,7 @@ class Webserv
         bool checkDuplicatePorts(void) const;
         bool checkDuplicatePaths(void);
         bool checkFileExtension(const std::string path) const;
+        bool checkMaxBodySize(const std::string value);
         std::vector<std::string> semicolonBracketsFix(const std::vector<std::string> input);
     public:
         Webserv();
@@ -64,3 +75,7 @@ class Webserv
 };
 
 #endif
+
+
+//     struct in_addr ipv4;
+    // if (inet_pton(AF_INET, host.c_str(), &ipv4) == 1)
