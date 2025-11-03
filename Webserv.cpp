@@ -324,14 +324,13 @@ std::string Webserv::convertHostToIp(const std::string host)
     memset(&hints, 0, sizeof(hints));
     hints.ai_family = AF_INET;
     hints.ai_socktype = SOCK_STREAM;
-    hints.ai_flags = AI_PASSIVE;
 
     int status = getaddrinfo(host.c_str(), NULL, &hints, &res);
     if (status != 0 || res == NULL)
         throw std::runtime_error("Error: Listening address is invalid.");
 
     char ip_string[INET_ADDRSTRLEN];
-    struct sockaddr_in *ipv4 = (struct sockaddr_in *)res->ai_addr;
+    struct sockaddr_in *ipv4 = reinterpret_cast<struct sockaddr_in *>(res->ai_addr);
     inet_ntop(AF_INET, &(ipv4->sin_addr), ip_string, sizeof(ip_string));
 
     freeaddrinfo(res);
