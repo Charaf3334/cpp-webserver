@@ -263,17 +263,17 @@ bool Webserv::checkMaxBodySize(const std::string value)
 
 bool Webserv::checkDuplicatePorts(void) const
 {
-    std::map<std::string, int> hashMap;
+    std::set< std::pair<std::string, int> > seen;
     for (size_t i = 0; i < servers.size(); i++)
     {
-        std::map<std::string, int>::iterator found = hashMap.find(servers[i].ip_address);
-        if (found == hashMap.end())
-            hashMap[servers[i].ip_address] = servers[i].port;
-        else if (found->second == servers[i].port)
+        std::pair<std::string, int> pair(servers[i].ip_address, servers[i].port);
+        if (seen.find(pair) != seen.end())
             return true;
+        seen.insert(pair);
     }
     return false;
 }
+
 
 bool Webserv::checkDuplicatePaths(void)
 {
