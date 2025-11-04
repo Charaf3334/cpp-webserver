@@ -387,6 +387,8 @@ bool Webserv::checkValidListen(const std::string s, bool &isHost) const
         return false;
     std::string ip = s.substr(0, idx);
     std::string p = s.substr(idx + 1);
+    if (p.empty())
+        return false;
     for (size_t i = 0; i < p.length(); i++)
         if (!isdigit(p[i]))
             return false;
@@ -516,7 +518,7 @@ Webserv::Server Webserv::parseServer(size_t &i)
             if (!sawLocation)
                 throw std::runtime_error("Error: Expected location block in server block.");
         }
-        if (i + 1 < tokens.size() && tokens[i + 1] == "server")
+        if (i + 1 < tokens.size() && tokens[i + 1] == "server" && depth != 1)
         {
             i++;
             break;
