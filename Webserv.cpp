@@ -243,6 +243,7 @@ void Webserv::read_file(void)
                 std::cout << "is Text: " << (servers[i].locations[j].redirectionIsText ? "True" : "False") << std::endl;
                 std::cout << "Code & URL/TEXT: " << it->first << " -> " << it->second << std::endl;
             }
+            std::cout << "Upload: " << servers[i].locations[j].upload_dir << std::endl;
         }
         std::cout << "-------------------------------------------------" << std::endl;
     }
@@ -407,16 +408,16 @@ bool Webserv::checkValidListen(const std::string s, bool &isHost) const
     return true;
 }
 
-bool Webserv::checkServerName(const std::string s) const
-{
-    size_t len = s.length();
+// bool Webserv::checkServerName(const std::string s) const
+// {
+//     size_t len = s.length();
 
-    if (!len)
-        return false;
-    if (s != "localhost")
-        return false;
-    return true;
-}
+//     if (!len)
+//         return false;
+//     if (s != "localhost")
+//         return false;
+//     return true;
+// }
 
 bool Webserv::checkStatusCode(const std::string code) const
 {
@@ -511,6 +512,7 @@ void Webserv::locationDefaultInit(Location &location)
     location.root = "";
     location.isRedirection = false;
     location.redirectionIsText = false;
+    location.upload_dir = "./uploads"; // default path
 }
 
 bool Webserv::checkPath(const std::string path) const
@@ -627,6 +629,7 @@ void Webserv::parseLocation(size_t &i, Webserv::Server &server, int &depth, bool
     bool sawMethods = false;
     bool sawAutoIndex = false;
     bool sawRedirection = false;
+    bool sawUpload = false;
     i++;
     Location location;
     locationDefaultInit(location);
@@ -729,6 +732,21 @@ void Webserv::parseLocation(size_t &i, Webserv::Server &server, int &depth, bool
             }
             if (tokens[i] != ";")
                 throw std::runtime_error("Error: Expected ';' at the end of return directive.");
+        }
+        else if (tokens[i] == "upload_dir")
+        {
+            if (sawUpload)
+                throw std::runtime_error("Error: Duplicate upload directive.");
+            sawUpload = true;
+            i++;
+            if (tokens[i] == ";")
+                throw std::runtime_error("Error: Expected path for upload_dir.");
+            if (!checkRoot(tokens[i]))
+                throw std::runtime_error("Error: Invalid path for upload_dir.");
+            location.upload_dir = tokens[i];
+            i++;
+            if (tokens[i] != ";")
+                throw std::runtime_error("Error: Expected ';' after upload_dir.");
         }
         else if (tokens[i] != "root" && tokens[i] != "index" && tokens[i] != "allow_methods" && tokens[i] != "autoindex" && tokens[i] != ";")
             throw std::runtime_error("Error: Invalid directive '" + tokens[i] + "' inside location block.");

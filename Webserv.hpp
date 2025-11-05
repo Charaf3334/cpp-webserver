@@ -30,6 +30,7 @@ class Webserv
             bool isRedirection;
             bool redirectionIsText;
             std::map<int, std::string> redirection;
+            std::string upload_dir;
         };
         struct Server
         {
@@ -57,7 +58,7 @@ class Webserv
         bool isValidIp(const std::string ip) const;
         bool checkHost(const std::string host, bool &isHost) const;
         std::string convertHostToIp(const std::string host); 
-        bool checkServerName(const std::string s) const;
+        // bool checkServerName(const std::string s) const;
         void serverDefaultInit(Webserv::Server &server);
         void locationDefaultInit(Location &location);
         bool checkPath(const std::string path) const;

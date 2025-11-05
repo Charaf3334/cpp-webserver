@@ -4,13 +4,16 @@ int main(int ac, char **av)
 {
     try
     {
-        if (ac != 2)
+        if (ac == 2 || ac == 1)
+        {
+            Webserv server(ac == 2 ? av[1] : "./default/default.conf");
+            server.read_file();
+        }
+        else
         {
             std::cerr << "Error: Number of args is not valid." << std::endl;
             return 1;
         }
-        Webserv server(av[1]);
-        server.read_file();
     }
     catch (const std::exception &e)
     {
