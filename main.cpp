@@ -4,7 +4,7 @@ int main(int ac, char **av)
 {
     try
     {
-        if (ac == 2 || ac == 1)
+        if (ac <= 2)
         {
             Webserv server(ac == 2 ? av[1] : "./default/default.conf");
             server.read_file();
