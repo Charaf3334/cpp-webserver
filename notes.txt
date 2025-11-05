@@ -10,8 +10,10 @@ to do:
     - its okay for two servers to listen to same port mais khs ykon 3ndhum different virtual host name (aka server name), mais 7na mo7al ndiroha ✅
     - fix listen syntax (listen 127.0.0.1:8080) ✅
 
-    - redirection return [CODE] [URL], return [CODE] [TEXT], return [URL] (code howa 302) ❌
+    - redirection return [CODE] [URL], return [CODE] [TEXT] ✅, return [URL] (code howa 302) ❌
     - for redirection i still need to check for codes and if the next argument is TEXT or URL, since some status codes only support TEXT and others only support URL; ❌
+
+    - need to add upload_dir directive as PATH to store uploaded files. ❌
 
     - nginx allows multiple same location, mais kayoverridi lakano 2 /api aykhdm b akhir whda. ❌
     - check for all directives and their behavior using nginx ❌

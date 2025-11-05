@@ -437,7 +437,11 @@ bool Webserv::checkUrlText(size_t i, Location &location) const
         if (tokens[i][0] != '"')
             return false;
         if (std::count(tokens[i].begin(), tokens[i].end(), '"') == 2)
+        {
+            if (tokens[i][0] != '"' || tokens[i][tokens[i].length() - 1] != '"')
+                return false;
             return true;
+        }
         i++;
         while (i < tokens.size() && tokens[i] != ";")
         {
