@@ -240,6 +240,7 @@ void Webserv::read_file(void)
             if (servers[i].locations[j].isRedirection)
             {
                 std::map<int, std::string>::iterator it = servers[i].locations[j].redirection.begin();
+                std::cout << "is Text: " << (servers[i].locations[j].redirectionIsText ? "True" : "False") << std::endl;
                 std::cout << "Code & URL/TEXT: " << it->first << " -> " << it->second << std::endl;
             }
         }
@@ -446,6 +447,7 @@ bool Webserv::checkUrlText(size_t i, Location &location) const
         }
         return false;
     }
+    // this block where i will handle URL
     return true;
 }
 
