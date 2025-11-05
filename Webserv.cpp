@@ -59,47 +59,59 @@ bool Webserv::checkFileExtension(const std::string path) const
 
 size_t Webserv::countParts(const std::string line) const
 {
-    size_t _count = 0;
+    size_t count = 0;
     bool in_exp = false;
+    bool in_quotes = false;
+
     for (size_t i = 0; i < line.size(); i++)
     {
-        if (isspace(line[i]))
+        if (line[i] == '"')
+            in_quotes = !in_quotes;
+        else if (!in_quotes && isspace(line[i]))
             in_exp = false;
         else
         {
             if (!in_exp)
             {
-                _count++;
+                count++;
                 in_exp = true;
             }
         }
     }
-    return _count;
+    return count;
 }
 
 std::string* Webserv::split(const std::string line)
 {
     size_t count = this->countParts(line);
     std::string* parts = new std::string[count];
+    size_t i = 0;
+    size_t idx = 0;
+    bool in_quotes = false;
     size_t size = line.size();
 
-    size_t idx = 0;
-    size_t i = 0;
     while (i < size && idx < count)
     {
-        while (i < size && isspace(line[i]))
+        while (i < size && isspace(line[i]) && !in_quotes)
             i++;
         if (i >= size)
             break;
 
         size_t j = i;
-        while (j < size && !isspace(line[j])) 
+        while (j < size)
+        {
+            if (line[j] == '"')
+                in_quotes = !in_quotes;
+            else if (!in_quotes && isspace(line[j]))
+                break;
             j++;
+        }
         parts[idx++] = line.substr(i, j - i);
         i = j;
     }
     return parts;
 }
+
 
 std::vector<std::string> Webserv::semicolonBracketsFix(const std::vector<std::string> input)
 {
@@ -456,49 +468,6 @@ bool Webserv::checkUrlText(size_t i, Location &location) const
     return true;
 }
 
-std::string Webserv::retrieveText(size_t &i)
-{
-    std::string result;
-    bool started = false;
-
-    while (i < tokens.size() && tokens[i] != ";")
-    {
-        std::string token = tokens[i];
-        if (!started)
-        {
-            size_t start_pos = token.find('"');
-            if (start_pos != std::string::npos)
-            {
-                started = true;
-                token.erase(start_pos, 1);
-                size_t end_pos = token.find('"');
-                if (end_pos != std::string::npos)
-                {
-                    token.erase(end_pos, 1);
-                    result += token;
-                    i++;
-                    break;
-                }
-                result += token;
-            }
-        }
-        else
-        {
-            size_t end_pos = token.find('"');
-            if (end_pos != std::string::npos)
-            {
-                result += " " + token.substr(0, end_pos);
-                i++;
-                break;
-            }
-            else
-                result += " " + token;
-        }
-        i++;
-    }
-    return result;
-}
-
 void Webserv::serverDefaultInit(Webserv::Server &server)
 {
     server.name = "";
@@ -723,13 +692,8 @@ void Webserv::parseLocation(size_t &i, Webserv::Server &server, int &depth, bool
                 throw std::runtime_error("Error: Expected URL/TEXT after status code.");
             if (!checkUrlText(i, location))
                 throw std::runtime_error("Error: Invalid TEXT/URL after status code.");
-            if (location.redirectionIsText)
-                location.redirection[status_code] = retrieveText(i);
-            else
-            {
-                location.redirection[status_code] = tokens[i]; // still need to parse URL
-                i++;
-            }
+            location.redirection[status_code] = tokens[i]; // still need to parse URL
+            i++;
             if (tokens[i] != ";")
                 throw std::runtime_error("Error: Expected ';' at the end of return directive.");
         }

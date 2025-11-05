@@ -70,7 +70,6 @@ class Webserv
         bool checkMaxBodySize(const std::string value);
         bool checkStatusCode(const std::string code) const;
         bool checkUrlText(size_t i, Location &location) const;
-        std::string retrieveText(size_t &i);
         std::vector<std::string> semicolonBracketsFix(const std::vector<std::string> input);
     public:
         Webserv();
