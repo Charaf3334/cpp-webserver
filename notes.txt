@@ -1,0 +1,20 @@
+- handle missing of required fields and errors to throw (ie. root and index and so on)
+- handle when no config file is passed as parameter, should work with a default one present in some PATH
+
+- khsni mzl nchof subject lakant chi haja tzad f config file w ha7na salina hh
+
+- 444 closes connection.
+
+to do:
+    - server_name khso yt7yd wa9ila ✅
+    - its okay for two servers to listen to same port mais khs ykon 3ndhum different virtual host name (aka server name), mais 7na mo7al ndiroha ✅
+    - fix listen syntax (listen 127.0.0.1:8080) ✅
+
+    - redirection return [CODE] [URL], return [CODE] [TEXT], return [URL] (code howa 302) ❌
+    - for redirection i still need to check for codes and if the next argument is TEXT or URL, since some status codes only support TEXT and others only support URL; ❌
+
+    - nginx allows multiple same location, mais kayoverridi lakano 2 /api aykhdm b akhir whda. ❌
+    - check for all directives and their behavior using nginx ❌
+
+    - content-type will be stored as std::map (extension, content-type) ❌
+    - status codes and their messages will be stored as std::map (code, message) ❌

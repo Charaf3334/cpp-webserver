@@ -16,7 +16,8 @@
 #include <netdb.h>
 #include <cstring>
 
-class Webserv
+
+class Webserv 
 {
     private:
         struct Location
@@ -26,6 +27,9 @@ class Webserv
             std::vector<std::string> methods;
             bool autoindex;
             std::vector<std::string> index;
+            bool isRedirection;
+            bool redirectionIsText;
+            std::map<int, std::string> redirection;
         };
         struct Server
         {
@@ -63,6 +67,9 @@ class Webserv
         bool checkDuplicatePaths(void);
         bool checkFileExtension(const std::string path) const;
         bool checkMaxBodySize(const std::string value);
+        bool checkStatusCode(const std::string code) const;
+        bool checkUrlText(size_t i, Location &location) const;
+        std::string retrieveText(size_t &i);
         std::vector<std::string> semicolonBracketsFix(const std::vector<std::string> input);
     public:
         Webserv();
@@ -75,7 +82,3 @@ class Webserv
 };
 
 #endif
-
-
-//     struct in_addr ipv4;
-    // if (inet_pton(AF_INET, host.c_str(), &ipv4) == 1)

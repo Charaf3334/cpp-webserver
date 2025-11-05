@@ -236,6 +236,12 @@ void Webserv::read_file(void)
                 std::cout << "Methods: " << j << " " << servers[i].locations[j].methods[k] << std::endl;
             }
             std::cout << "Autoindex: " << j << " " << (servers[i].locations[j].autoindex ? "True" : "False") << std::endl;
+            std::cout << "Redirection: " << j << " " << (servers[i].locations[j].isRedirection ? "True" : "False") << std::endl;
+            if (servers[i].locations[j].isRedirection)
+            {
+                std::map<int, std::string>::iterator it = servers[i].locations[j].redirection.begin();
+                std::cout << "Code & URL/TEXT: " << it->first << " -> " << it->second << std::endl;
+            }
         }
         std::cout << "-------------------------------------------------" << std::endl;
     }
@@ -411,6 +417,81 @@ bool Webserv::checkServerName(const std::string s) const
     return true;
 }
 
+bool Webserv::checkStatusCode(const std::string code) const
+{
+    for (size_t i = 0; i < code.length(); i++)
+        if (!isdigit(code[i]))
+            return false;
+    long status_code = atol(code.c_str());
+    if (status_code < 100 || status_code > 599)
+        return false;
+    return true;
+}
+
+bool Webserv::checkUrlText(size_t i, Location &location) const
+{
+    if (tokens[i].find('"') != std::string::npos)
+    {
+        location.redirectionIsText = true;
+        if (tokens[i][0] != '"')
+            return false;
+        if (std::count(tokens[i].begin(), tokens[i].end(), '"') == 2)
+            return true;
+        i++;
+        while (i < tokens.size() && tokens[i] != ";")
+        {
+            if (tokens[i].find('"') != std::string::npos)
+                return true;
+            i++;
+        }
+        return false;
+    }
+    return true;
+}
+
+std::string Webserv::retrieveText(size_t &i)
+{
+    std::string result;
+    bool started = false;
+
+    while (i < tokens.size() && tokens[i] != ";")
+    {
+        std::string token = tokens[i];
+        if (!started)
+        {
+            size_t start_pos = token.find('"');
+            if (start_pos != std::string::npos)
+            {
+                started = true;
+                token.erase(start_pos, 1);
+                size_t end_pos = token.find('"');
+                if (end_pos != std::string::npos)
+                {
+                    token.erase(end_pos, 1);
+                    result += token;
+                    i++;
+                    break;
+                }
+                result += token;
+            }
+        }
+        else
+        {
+            size_t end_pos = token.find('"');
+            if (end_pos != std::string::npos)
+            {
+                result += " " + token.substr(0, end_pos);
+                i++;
+                break;
+            }
+            else
+                result += " " + token;
+        }
+        i++;
+    }
+    return result;
+}
+
 void Webserv::serverDefaultInit(Webserv::Server &server)
 {
     server.name = "";
@@ -422,6 +503,8 @@ void Webserv::locationDefaultInit(Location &location)
     location.autoindex = false;
     location.path = "";
     location.root = "";
+    location.isRedirection = false;
+    location.redirectionIsText = false;
 }
 
 bool Webserv::checkPath(const std::string path) const
@@ -537,6 +620,7 @@ void Webserv::parseLocation(size_t &i, Webserv::Server &server, int &depth, bool
     bool sawIndex = false;
     bool sawMethods = false;
     bool sawAutoIndex = false;
+    bool sawRedirection = false;
     i++;
     Location location;
     locationDefaultInit(location);
@@ -613,10 +697,37 @@ void Webserv::parseLocation(size_t &i, Webserv::Server &server, int &depth, bool
                 throw std::runtime_error("Error: Expected ';' after autoindex.");
             tokens[i] == "on" ? location.autoindex = true : location.autoindex = false;
         }
+        else if (tokens[i] == "return")
+        {
+            if (sawRedirection)
+                throw std::runtime_error("Error: Duplicate return directive.");
+            sawRedirection = true;
+            location.isRedirection = true;
+            i++;
+            if (tokens[i] == ";")
+                throw std::runtime_error("Error: Expected CODE and URL/TEXT after return.");
+            if (!checkStatusCode(tokens[i]))
+                throw std::runtime_error("Error: Invalid status code.");
+            int status_code = atoi(tokens[i].c_str());
+            i++;
+            if (tokens[i] == ";")
+                throw std::runtime_error("Error: Expected URL/TEXT after status code.");
+            if (!checkUrlText(i, location))
+                throw std::runtime_error("Error: Invalid TEXT/URL after status code.");
+            if (location.redirectionIsText)
+                location.redirection[status_code] = retrieveText(i);
+            else
+            {
+                location.redirection[status_code] = tokens[i]; // still need to parse URL
+                i++;
+            }
+            if (tokens[i] != ";")
+                throw std::runtime_error("Error: Expected ';' at the end of return directive.");
+        }
         else if (tokens[i] != "root" && tokens[i] != "index" && tokens[i] != "allow_methods" && tokens[i] != "autoindex" && tokens[i] != ";")
             throw std::runtime_error("Error: Invalid directive '" + tokens[i] + "' inside location block.");
     }
-    if (!sawRoot)
+    if (!sawRoot && !sawRedirection)
         throw std::runtime_error("Error: Missing root inside location.");
     if (tokens[i] == "}")
         depth--;
@@ -624,20 +735,3 @@ void Webserv::parseLocation(size_t &i, Webserv::Server &server, int &depth, bool
         depth--;
     server.locations.push_back(location);
 }
-
-
-// handle missing of required fields and errors to throw (ie. root and index and so on)
-// handle when no config file is passed as parameter, should work with a default one present in some PATH
-
-// khsni mzl nchof subject lakant chi haja tzad f config file w ha7na salina hh
-
-
-// to do:
-    // server_name khso yt7yd wa9ila ✅
-    // its okay for two servers to listen to same port mais khs ykon 3ndhum different virtual host name (aka server name), mais 7na mo7al ndiroha ✅
-    // fix listen syntax (listen 127.0.0.1:8080) ✅
-    // nginx allows multiple same location, mais kayoverridi lakano 2 /api aykhdm b akhir whda. ❌
-    // check for all directives and their behavior using nginx ❌
-
-    // content-type will be stored as std::map (extension, content-type) ❌
-    // status codes and their messages will be stored as std::map (code, message) ❌
