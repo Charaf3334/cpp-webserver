@@ -38,12 +38,13 @@ class Webserv
             int port;
             std::string name;
             std::vector<Location> locations; 
+            std::string root;
         };
 
         std::ifstream config_file;
         std::vector<std::string> tokens;
         std::vector<Webserv::Server> servers;
-        std::vector<std::string> error_pages;
+        std::map<std::string, std::string> error_pages;
         std::string client_max_body_size;
         std::stack<std::string> brackets;
         

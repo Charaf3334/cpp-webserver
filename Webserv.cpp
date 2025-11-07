@@ -143,6 +143,24 @@ std::vector<std::string> Webserv::semicolonBracketsFix(const std::vector<std::st
     return result;
 }
 
+unsigned long stringToUnsignedLong(const std::string& str) {
+
+    for (size_t i = 0; i < str.length(); i++) {
+        if (!std::isdigit(str[i])) {
+            throw std::invalid_argument("Error: '" + str + "' is not a valid status number");
+        }
+    }
+
+    std::istringstream is(str);
+    unsigned long result;
+    is >> result;
+
+    if (is.fail()) {
+        throw std::out_of_range("Error: '" + str + "' is too large for unsigned long");
+    }
+    
+    return result;
+}
 
 void Webserv::read_file(void)
 {
@@ -162,100 +180,157 @@ void Webserv::read_file(void)
         throw std::runtime_error("Error: Unclosed brackets are inside the config file.");
     if (!checkSemicolon())
         throw std::runtime_error("Error: Semicolon not in appropriate place.");
+    
     for (size_t i = 0; i < tokens.size(); i++)
     {
-        bool bodySizeFlag = false;
         if (tokens[i] == "http")
         {
             i++;
             if (tokens[i] != "{")
                 throw std::runtime_error("Error: Expected '{' after http.");
             i++;
-            if (tokens[i] != "error_pages")
-                throw std::runtime_error("Error: Expected error_pages after http.");
-            i++;
-            if (tokens[i] == ";")
-                throw std::runtime_error("Error: No error pages are provided.");
-            while (i < tokens.size() && (tokens[i] != ";" && tokens[i] != "client_max_body_size" && tokens[i] != "server"))
+            
+            bool has_body_size = false;
+            
+            while (i < tokens.size() && tokens[i] != "}" && tokens[i] != "server")
             {
-                if (!checkRoot(tokens[i]))
-                    throw std::runtime_error("Error: " + tokens[i] + " not a valid path for error_pages.");
-                error_pages.push_back(tokens[i++]);
+                if (tokens[i] == "error_page")
+                {
+                    i++;
+                    if (i >= tokens.size() || tokens[i] == ";")
+                        throw std::runtime_error("Error: No error pages provided.");
+
+                    std::vector<std::string> error_codes;
+                    std::string error_path;
+
+                    while (i < tokens.size() && tokens[i] != ";" && tokens[i] != "}" && tokens[i] != "server")
+                    {
+                        if (std::isdigit(tokens[i][0]))
+                        {
+                            unsigned long num = stringToUnsignedLong(tokens[i]);
+                            if (num < 300 || num > 599)
+                                throw std::runtime_error("Error: Status code " + tokens[i] + " must be between 300 and 599");
+                            error_codes.push_back(tokens[i]);
+                            i++;
+                        }
+                        else
+                        {
+                            error_path = tokens[i];
+                            if (!checkRoot(error_path))
+                                throw std::runtime_error("Error: " + error_path + " not a valid path for error_page.");
+                            i++;
+                            break;
+                        }
+                    }
+                    if (error_codes.empty())
+                        throw std::runtime_error("Error: No error codes provided for error_page.");
+                    if (error_path.empty())
+                        throw std::runtime_error("Error: No path provided for error_page.");
+                
+                    for (size_t j = 0; j < error_codes.size() && error_pages[error_codes[j]].empty(); j++)
+                    {
+                        error_pages[error_codes[j]] = error_path;
+                    }
+                    if (i < tokens.size() && tokens[i] == ";")
+                        i++;
+                    else if (i < tokens.size() && tokens[i] != "}" && tokens[i] != "server")
+                        throw std::runtime_error("Error: Expected ';' after error_page.");
+                }
+                else if (tokens[i] == "client_max_body_size")
+                {
+                    if (has_body_size)
+                        throw std::runtime_error("Error: Duplicate client_max_body_size directive.");
+                    
+                    i++;
+                    if (i >= tokens.size() || tokens[i] == ";")
+                        throw std::runtime_error("Error: Empty client_max_body_size.");
+                    std::string body_size_value = tokens[i];
+                    i++;
+                    if (i >= tokens.size() || tokens[i] != ";")
+                        throw std::runtime_error("Error: Expected ';' after client_max_body_size.");
+                    
+                    if (!checkMaxBodySize(body_size_value))
+                        throw std::runtime_error("Error: Invalid value for client_max_body_size.");
+                    
+                    client_max_body_size = body_size_value;
+                    i++;
+                    has_body_size = true;
+                }
+                else if (tokens[i] == ";")
+                {
+                    i++;
+                }
+                else
+                {
+                    throw std::runtime_error("Error: Unexpected token in http block: " + tokens[i]);
+                }
             }
-            i++;
-            if (tokens[i] != "server" && tokens[i] != "client_max_body_size")
-                throw std::runtime_error("Error: Expected ';' after error_pages.");
-            if (tokens[i] == "client_max_body_size")
-            {
-                i++;
-                if (tokens[i] == ";")
-                    throw std::runtime_error("Error: Empty client_max_body_size.");
-                if (tokens[i + 1] != ";")
-                    throw std::runtime_error("Error: Expected ';' after client_max_body_size or many values provided.");
-                if (!checkMaxBodySize(tokens[i]))
-                    throw std::runtime_error("Error: Invalid value for client_max_body_size.");
-                bodySizeFlag = true;
-                client_max_body_size = tokens[i];
-            }
-            if (bodySizeFlag)
-            {
-                i++;
-                if (tokens[i] != ";")
-                    throw std::runtime_error("Error: Expected ';' after client_max_body_size.");
-                i++;
-            }
+
+            if (client_max_body_size.empty()) // zakaria default body size
+                client_max_body_size = "1M";
+
             while (i < tokens.size() && tokens[i] != "}")
             {
                 if (tokens[i] == "server")
                 {
                     i++;
-                    if (tokens[i] != "{")
+                    if (i >= tokens.size() || tokens[i] != "{")
                         throw std::runtime_error("Error: Expected '{' after server.");
                     i++;
                     Server s = parseServer(i);
                     this->servers.push_back(s);
                 }
+                else if (tokens[i] == ";")
+                    i++;
                 else
-                    throw std::runtime_error("Error: Server block not found.");
+                {
+                    throw std::runtime_error("Error: Server block not found or unexpected token: " + tokens[i]);
+                }
             }
+            if (i < tokens.size() && tokens[i] == "}")
+                i++;
         }
         else
             throw std::runtime_error("Error: Http context not found.");
     }
+    
     if (checkDuplicatePorts())
         throw std::runtime_error("Error: Multiple servers listen to same ports.");
     if (checkDuplicatePaths())
         throw std::runtime_error("Error: Server has the same location path multiple times.");
 
-    // print_data
-    for (size_t i = 0; i < error_pages.size(); i++)
-        std::cout << "Error_pages: " << error_pages[i] << std::endl;
+    std::cout << "ERROR PAGES\n";
+    for (std::map<std::string, std::string>::iterator it = error_pages.begin(); it != error_pages.end(); it++)
+        std::cout << "Error_page: " << it->first << " -> " << it->second << std::endl;
+    
     std::cout << "MAX_CLIENT_BODY_SIZE: " << (client_max_body_size.empty() ? "Empty" : client_max_body_size) << std::endl;
     for (size_t i = 0; i < servers.size(); i++)
     {
+        std::cout << "\nSERVER[" << i << "]\n";
         std::cout << "Listen: " << servers[i].ip_address <<  ":" << servers[i].port << std::endl;
-        // std::cout << "Name: " <<  servers[i].name << std::endl;
+        std::cout << "Server Root: " << servers[i].root << std::endl;
         for (size_t j = 0; j < servers[i].locations.size(); j++)
         {
-            std::cout << "Path: " << j << " " << servers[i].locations[j].path << std::endl;
-            std::cout << "Root: " << j << " " << servers[i].locations[j].root << std::endl;
+            std::cout << "  \nLOCATION[" << j << "]\n";
+            std::cout << "    Path: " << j << " " << servers[i].locations[j].path << std::endl;
+            std::cout << "    Root: " << j << " " << servers[i].locations[j].root << std::endl;
             for (size_t k = 0; k < servers[i].locations[j].index.size(); k++)
             {
-                std::cout << "Index: " << j << " " << servers[i].locations[j].index[k] << std::endl;
+                std::cout << "    Index: " << j << " " << servers[i].locations[j].index[k] << std::endl;
             }
             for (size_t k = 0; k < servers[i].locations[j].methods.size(); k++)
             {
-                std::cout << "Methods: " << j << " " << servers[i].locations[j].methods[k] << std::endl;
+                std::cout << "    Methods: " << j << " " << servers[i].locations[j].methods[k] << std::endl;
             }
-            std::cout << "Autoindex: " << j << " " << (servers[i].locations[j].autoindex ? "True" : "False") << std::endl;
-            std::cout << "Redirection: " << j << " " << (servers[i].locations[j].isRedirection ? "True" : "False") << std::endl;
+            std::cout << "    Autoindex: " << j << " " << (servers[i].locations[j].autoindex ? "True" : "False") << std::endl;
+            std::cout << "    Redirection: " << j << " " << (servers[i].locations[j].isRedirection ? "True" : "False") << std::endl;
             if (servers[i].locations[j].isRedirection)
             {
                 std::map<int, std::string>::iterator it = servers[i].locations[j].redirection.begin();
-                std::cout << "is Text: " << (servers[i].locations[j].redirectionIsText ? "True" : "False") << std::endl;
-                std::cout << "Code & URL/TEXT: " << it->first << " -> " << it->second << std::endl;
+                std::cout << "    is Text: " << (servers[i].locations[j].redirectionIsText ? "True" : "False") << std::endl;
+                std::cout << "    Code & URL/TEXT: " << it->first << " -> " << it->second << std::endl;
             }
-            std::cout << "Upload: " << servers[i].locations[j].upload_dir << std::endl;
+            std::cout << "    Upload: " << servers[i].locations[j].upload_dir << std::endl;
         }
         std::cout << "-------------------------------------------------" << std::endl;
     }
@@ -472,6 +547,7 @@ void Webserv::serverDefaultInit(Webserv::Server &server)
 {
     server.name = "";
     server.port = -1;
+    server.root = "";
 }
 
 void Webserv::locationDefaultInit(Location &location)
@@ -518,7 +594,7 @@ Webserv::Server Webserv::parseServer(size_t &i)
     bool sawLocation = false;
     int depth = 1;
     bool isHost = false;
-
+    bool sawRoot = false;
     for (; i < tokens.size(); i++)
     {
         if (tokens[i] == "listen")
@@ -569,7 +645,23 @@ Webserv::Server Webserv::parseServer(size_t &i)
         //     if (!sawServerName)
         //         throw std::runtime_error("Error: Expected server_name directive in server block.");
         // }
-        if (tokens[i] != "listen" && tokens[i] != "server_name" && tokens[i] != "location" && tokens[i] != "}")
+        if (tokens[i] == "root") // zakaria root in server
+        {
+            if (sawRoot)
+                throw std::runtime_error("Error: Duplicate root directive.");
+            sawRoot = true;
+            i++;
+            if (tokens[i] == ";")
+                throw std::runtime_error("Error: Expected a path after root directive.");
+            if (tokens[i + 1] != ";")
+                throw std::runtime_error("Error: Expected ';' after root.");
+            if (!checkRoot(tokens[i])) // khsni mzl nchecki wach dak path 3ndi, hada ghy check syntax
+                throw std::runtime_error("Error: Invalid path for root directive.");
+            server.root = tokens[i];
+            i++;
+            continue;
+        }
+        if (tokens[i] != "listen" && tokens[i] != "server_name" && tokens[i] != "location" && tokens[i] != "root" && tokens[i] != "}")
             throw std::runtime_error("Error: Unknown directive '" + tokens[i] + "'.");
         if (tokens[i] == "location")
             parseLocation(i, server, depth, sawLocation);
@@ -715,8 +807,15 @@ void Webserv::parseLocation(size_t &i, Webserv::Server &server, int &depth, bool
         else if (tokens[i] != "root" && tokens[i] != "index" && tokens[i] != "allow_methods" && tokens[i] != "autoindex" && tokens[i] != ";")
             throw std::runtime_error("Error: Invalid directive '" + tokens[i] + "' inside location block.");
     }
-    if (!sawRoot && !sawRedirection)
+    if (server.root.empty() && !sawRoot && !sawRedirection)
         throw std::runtime_error("Error: Missing root inside location.");
+    else if (!server.root.empty() && !sawRoot) // zakaria if root is not in location but exists in server block overridih
+        location.root = server.root;
+
+    if (!sawIndex)
+        location.index.push_back("index.html");
+
+
     if (tokens[i] == "}")
         depth--;
     if (tokens[i + 1] == "}")
