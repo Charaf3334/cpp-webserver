@@ -143,23 +143,30 @@ std::vector<std::string> Webserv::semicolonBracketsFix(const std::vector<std::st
     return result;
 }
 
-unsigned long stringToUnsignedLong(const std::string& str) {
-
-    for (size_t i = 0; i < str.length(); i++) {
-        if (!std::isdigit(str[i])) {
+unsigned long Webserv::stringToUnsignedLong(const std::string str) const
+{
+    for (size_t i = 0; i < str.length(); i++)
+        if (!std::isdigit(str[i]))
             throw std::invalid_argument("Error: '" + str + "' is not a valid status number");
-        }
-    }
-
     std::istringstream is(str);
     unsigned long result;
     is >> result;
-
-    if (is.fail()) {
+    if (is.fail())
         throw std::out_of_range("Error: '" + str + "' is too large for unsigned long");
-    }
-    
     return result;
+}
+
+bool Webserv::isValidStatusCode(const std::string code)
+{
+    try
+    {
+        stringToUnsignedLong(code);
+    }
+    catch (const std::exception &e)
+    {
+        return false;
+    }
+    return true;
 }
 
 void Webserv::read_file(void)
@@ -180,7 +187,7 @@ void Webserv::read_file(void)
         throw std::runtime_error("Error: Unclosed brackets are inside the config file.");
     if (!checkSemicolon())
         throw std::runtime_error("Error: Semicolon not in appropriate place.");
-    
+    bool sawServer = false;
     for (size_t i = 0; i < tokens.size(); i++)
     {
         if (tokens[i] == "http")
@@ -189,15 +196,13 @@ void Webserv::read_file(void)
             if (tokens[i] != "{")
                 throw std::runtime_error("Error: Expected '{' after http.");
             i++;
-            
             bool has_body_size = false;
-            
             while (i < tokens.size() && tokens[i] != "}" && tokens[i] != "server")
             {
                 if (tokens[i] == "error_page")
                 {
                     i++;
-                    if (i >= tokens.size() || tokens[i] == ";")
+                    if (tokens[i] == ";")
                         throw std::runtime_error("Error: No error pages provided.");
 
                     std::vector<std::string> error_codes;
@@ -205,7 +210,7 @@ void Webserv::read_file(void)
 
                     while (i < tokens.size() && tokens[i] != ";" && tokens[i] != "}" && tokens[i] != "server")
                     {
-                        if (std::isdigit(tokens[i][0]))
+                        if (isValidStatusCode(tokens[i]))
                         {
                             unsigned long num = stringToUnsignedLong(tokens[i]);
                             if (num < 300 || num > 599)
@@ -219,6 +224,8 @@ void Webserv::read_file(void)
                             if (!checkRoot(error_path))
                                 throw std::runtime_error("Error: " + error_path + " not a valid path for error_page.");
                             i++;
+                            if (tokens[i] != ";")
+                                throw std::runtime_error("Error: Expected ';' after error_page.");
                             break;
                         }
                     }
@@ -226,11 +233,8 @@ void Webserv::read_file(void)
                         throw std::runtime_error("Error: No error codes provided for error_page.");
                     if (error_path.empty())
                         throw std::runtime_error("Error: No path provided for error_page.");
-                
                     for (size_t j = 0; j < error_codes.size() && error_pages[error_codes[j]].empty(); j++)
-                    {
                         error_pages[error_codes[j]] = error_path;
-                    }
                     if (i < tokens.size() && tokens[i] == ";")
                         i++;
                     else if (i < tokens.size() && tokens[i] != "}" && tokens[i] != "server")
@@ -240,39 +244,31 @@ void Webserv::read_file(void)
                 {
                     if (has_body_size)
                         throw std::runtime_error("Error: Duplicate client_max_body_size directive.");
-                    
                     i++;
-                    if (i >= tokens.size() || tokens[i] == ";")
+                    if (tokens[i] == ";")
                         throw std::runtime_error("Error: Empty client_max_body_size.");
                     std::string body_size_value = tokens[i];
                     i++;
-                    if (i >= tokens.size() || tokens[i] != ";")
+                    if (tokens[i] != ";")
                         throw std::runtime_error("Error: Expected ';' after client_max_body_size.");
-                    
                     if (!checkMaxBodySize(body_size_value))
                         throw std::runtime_error("Error: Invalid value for client_max_body_size.");
-                    
                     client_max_body_size = body_size_value;
                     i++;
                     has_body_size = true;
                 }
                 else if (tokens[i] == ";")
-                {
                     i++;
-                }
                 else
-                {
                     throw std::runtime_error("Error: Unexpected token in http block: " + tokens[i]);
-                }
             }
-
             if (client_max_body_size.empty()) // zakaria default body size
                 client_max_body_size = "1M";
-
             while (i < tokens.size() && tokens[i] != "}")
             {
                 if (tokens[i] == "server")
                 {
+                    sawServer = true;
                     i++;
                     if (i >= tokens.size() || tokens[i] != "{")
                         throw std::runtime_error("Error: Expected '{' after server.");
@@ -283,9 +279,7 @@ void Webserv::read_file(void)
                 else if (tokens[i] == ";")
                     i++;
                 else
-                {
                     throw std::runtime_error("Error: Server block not found or unexpected token: " + tokens[i]);
-                }
             }
             if (i < tokens.size() && tokens[i] == "}")
                 i++;
@@ -293,7 +287,8 @@ void Webserv::read_file(void)
         else
             throw std::runtime_error("Error: Http context not found.");
     }
-    
+    if (!sawServer)
+        throw std::runtime_error("Error: Server not found.");
     if (checkDuplicatePorts())
         throw std::runtime_error("Error: Multiple servers listen to same ports.");
     if (checkDuplicatePaths())
@@ -647,6 +642,8 @@ Webserv::Server Webserv::parseServer(size_t &i)
         // }
         if (tokens[i] == "root") // zakaria root in server
         {
+            if (depth != 1)
+                throw std::runtime_error("Error: root not in appropriate place.");
             if (sawRoot)
                 throw std::runtime_error("Error: Duplicate root directive.");
             sawRoot = true;
@@ -751,7 +748,9 @@ void Webserv::parseLocation(size_t &i, Webserv::Server &server, int &depth, bool
             {
                 if (tokens[i] != "GET" && tokens[i] != "POST" && tokens[i] != "DELETE")
                     throw std::runtime_error("Error: Invalid http method or Expected ';'.");
-                location.methods.push_back(tokens[i]);
+                std::vector<std::string>::iterator found = std::find(location.methods.begin(), location.methods.end(), tokens[i]);
+                if (found == location.methods.end())
+                    location.methods.push_back(tokens[i]);
                 i++;
             }
         }
@@ -811,11 +810,10 @@ void Webserv::parseLocation(size_t &i, Webserv::Server &server, int &depth, bool
         throw std::runtime_error("Error: Missing root inside location.");
     else if (!server.root.empty() && !sawRoot) // zakaria if root is not in location but exists in server block overridih
         location.root = server.root;
-
     if (!sawIndex)
-        location.index.push_back("index.html");
-
-
+        location.index.push_back("./public/index.html");
+    if (!location.methods.size())
+        location.methods.push_back("GET");
     if (tokens[i] == "}")
         depth--;
     if (tokens[i + 1] == "}")

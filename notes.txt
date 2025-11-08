@@ -29,7 +29,7 @@ to do:
     - root key word momkin tkon b7al haka 
         server {
             listen 8080;
-            server_name zbi;
+            server_name localhost;
             root /home/zguellou/Documents/nginx_test;
         }
     - if root exists on server block and not in location, location.root = server.root, if root doesn't exist neither on server or location error. Index in location by default is "index.html"
@@ -44,3 +44,13 @@ to do:
             }
         }
     - checked status wach valid
+
+
+
+
+
+
+
+
+    ./auto/configure --prefix=$HOME/nginx
+    make; make install
