@@ -323,7 +323,7 @@ void Webserv::read_file(void)
             {
                 std::map<int, std::string>::iterator it = servers[i].locations[j].redirection.begin();
                 std::cout << "    is Text: " << (servers[i].locations[j].redirectionIsText ? "True" : "False") << std::endl;
-                std::cout << "    Code & URL/TEXT: " << it->first << " -> " << it->second << std::endl;
+                std::cout << "    Code & URL/TEXT: " << it->first << " -> " << "|" << it->second << "|" << std::endl;
             }
             std::cout << "    Upload: " << servers[i].locations[j].upload_dir << std::endl;
         }
@@ -783,6 +783,11 @@ void Webserv::parseLocation(size_t &i, Webserv::Server &server, int &depth, bool
                 throw std::runtime_error("Error: Expected URL/TEXT after status code.");
             if (!checkUrlText(i, location))
                 throw std::runtime_error("Error: Invalid TEXT/URL after status code.");
+            if (location.redirectionIsText)
+            {
+                tokens[i][0] = 0;
+                tokens[i][tokens[i].length() - 1] = 0;
+            }
             location.redirection[status_code] = tokens[i]; // still need to parse URL
             i++;
             if (tokens[i] != ";")
