@@ -147,12 +147,12 @@ unsigned long Webserv::stringToUnsignedLong(const std::string str) const
 {
     for (size_t i = 0; i < str.length(); i++)
         if (!std::isdigit(str[i]))
-            throw std::invalid_argument("Error: '" + str + "' is not a valid status number");
+            throw std::runtime_error("Error: '" + str + "' is not a valid status number");
     std::istringstream is(str);
     unsigned long result;
     is >> result;
     if (is.fail())
-        throw std::out_of_range("Error: '" + str + "' is too large for unsigned long");
+        throw std::runtime_error("Error: '" + str + "' is too large for unsigned long");
     return result;
 }
 
