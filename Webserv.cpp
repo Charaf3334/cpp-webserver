@@ -353,7 +353,7 @@ bool Webserv::checkMaxBodySize(const std::string value)
 
 bool Webserv::checkDuplicatePorts(void) const
 {
-    std::set< std::pair<std::string, int> > seen;
+    std::set<std::pair<std::string, int> > seen;
     for (size_t i = 0; i < servers.size(); i++)
     {
         std::pair<std::string, int> pair(servers[i].ip_address, servers[i].port);
@@ -410,7 +410,6 @@ std::string Webserv::convertHostToIp(const std::string host)
 {
     struct addrinfo hints;
     struct addrinfo *res = NULL;
-
     memset(&hints, 0, sizeof(hints));
     hints.ai_family = AF_INET;
     hints.ai_socktype = SOCK_STREAM;
@@ -418,11 +417,9 @@ std::string Webserv::convertHostToIp(const std::string host)
     int status = getaddrinfo(host.c_str(), NULL, &hints, &res);
     if (status != 0 || res == NULL)
         throw std::runtime_error("Error: Listening address is invalid.");
-
     char ip_string[INET_ADDRSTRLEN];
     struct sockaddr_in *ipv4 = reinterpret_cast<struct sockaddr_in *>(res->ai_addr);
     inet_ntop(AF_INET, &(ipv4->sin_addr), ip_string, sizeof(ip_string));
-
     freeaddrinfo(res);
     return std::string(ip_string);
 }
@@ -507,7 +504,7 @@ bool Webserv::checkStatusCode(const std::string code) const
         if (!isdigit(code[i]))
             return false;
     long status_code = atol(code.c_str());
-    if (status_code < 100 || status_code > 599)
+    if (status_code < 200 || status_code > 599)
         return false;
     return true;
 }
@@ -816,7 +813,7 @@ void Webserv::parseLocation(size_t &i, Webserv::Server &server, int &depth, bool
     else if (!server.root.empty() && !sawRoot) // zakaria if root is not in location but exists in server block overridih
         location.root = server.root;
     if (!sawIndex)
-        location.index.push_back("./public/index.html");
+        location.index.push_back("index.html");
     if (!location.methods.size())
         location.methods.push_back("GET");
     if (tokens[i] == "}")
