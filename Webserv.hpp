@@ -31,6 +31,8 @@ class Webserv
             bool redirectionIsText;
             std::map<int, std::string> redirection;
             std::string upload_dir;
+            std::map<std::string, std::string> cgi_extension; // .py -> /usr/bin/python3
+            bool hasCgi;
         };
         struct Server
         {
@@ -74,6 +76,7 @@ class Webserv
         unsigned long stringToUnsignedLong(const std::string str) const;
         bool isValidStatusCode(const std::string code);
         std::vector<std::string> semicolonBracketsFix(const std::vector<std::string> input);
+        void saveExtensionPath(const std::string extension, const std::string path, Location &location);
     public:
         Webserv();
         Webserv(const std::string config_file_path);

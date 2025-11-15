@@ -326,6 +326,15 @@ void Webserv::read_file(void)
                 std::cout << "    Code & URL/TEXT: " << it->first << " -> " << "|" << it->second << "|" << std::endl;
             }
             std::cout << "    Upload: " << servers[i].locations[j].upload_dir << std::endl;
+            if (servers[i].locations[j].hasCgi)
+            {
+                std::map<std::string, std::string>::iterator it = servers[i].locations[j].cgi_extension.begin();
+                for (; it != servers[i].locations[j].cgi_extension.end(); it++)
+                {
+                    std::cout << "    Cgi: " << it->first << std::endl;
+                    std::cout << "    Path: " << it->second << std::endl;
+                }
+            }
         }
         std::cout << "-------------------------------------------------" << std::endl;
     }
@@ -550,6 +559,7 @@ void Webserv::locationDefaultInit(Location &location)
     location.isRedirection = false;
     location.redirectionIsText = false;
     location.upload_dir = "./uploads"; // default path
+    location.hasCgi = false;
 }
 
 bool Webserv::checkPath(const std::string path) const
@@ -575,6 +585,16 @@ bool Webserv::checkRoot(const std::string path) const
     if (path[0] != '/' && !(path.size() > 1 && path[0] == '.' && path[1] == '/'))
         return false;
     return true;
+}
+
+void Webserv::saveExtensionPath(const std::string extension, const std::string path, Location &location)
+{
+    if ((extension == ".py" && path != "/usr/bin/python3") || (extension == ".php" && path != "/usr/bin/php"))
+        throw std::runtime_error("Error: Invalid path for " + extension + ".");
+    std::map<std::string, std::string>::iterator found = location.cgi_extension.find(extension);
+    if (found != location.cgi_extension.end())
+        throw std::runtime_error("Error: Duplicate in " + extension);
+    location.cgi_extension[extension] = path;
 }
 
 Webserv::Server Webserv::parseServer(size_t &i)
@@ -804,6 +824,21 @@ void Webserv::parseLocation(size_t &i, Webserv::Server &server, int &depth, bool
             i++;
             if (tokens[i] != ";")
                 throw std::runtime_error("Error: Expected ';' after upload_dir.");
+        }
+        else if (tokens[i] == "cgi")
+        {
+            i++;
+            location.hasCgi = true;
+            if (tokens[i] != ".py" && tokens[i] != ".php")
+                throw std::runtime_error("Error: Unknown extension for cgi.");
+            std::string extension = tokens[i];
+            i++;
+            if (tokens[i] == ";")
+                throw std::runtime_error("Error: No path is provided to run the cgi.");
+            saveExtensionPath(extension, tokens[i], location);
+            i++;
+            if (tokens[i] != ";")
+                throw std::runtime_error("Error: Expected ';' after cgi path.");
         }
         else if (tokens[i] != "root" && tokens[i] != "index" && tokens[i] != "allow_methods" && tokens[i] != "autoindex" && tokens[i] != ";")
             throw std::runtime_error("Error: Invalid directive '" + tokens[i] + "' inside location block.");
