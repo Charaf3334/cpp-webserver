@@ -1,18 +1,18 @@
 CPP       = c++
 FLAGS     = -Wall -Wextra -Werror -std=c++98
 
-SRCS      = main.cpp Webserv.cpp
+SRCS      = main.cpp Webserv.cpp Server.cpp
 OBJS      = $(SRCS:.cpp=.o)
 NAME      = webserv
 
 all: $(NAME)
-	make clean
-	clear
+# make clean
+# clear
 
 $(NAME): $(OBJS)
 	$(CPP) $(FLAGS) $(OBJS) -o $(NAME)
 
-%.o: %.cpp Webserv.hpp
+%.o: %.cpp Webserv.hpp Server.hpp
 	$(CPP) $(FLAGS) -c $< -o $@
 
 clean:

@@ -1,4 +1,7 @@
 #include "Webserv.hpp"
+#include "Server.hpp"
+
+Server* Server::instance = NULL;
 
 int main(int ac, char **av)
 {
@@ -6,8 +9,10 @@ int main(int ac, char **av)
     {
         if (ac <= 2)
         {
-            Webserv server(ac == 2 ? av[1] : "./default/default.conf");
-            server.read_file();
+            Webserv webserv(ac == 2 ? av[1] : "./default/default.conf");
+            webserv.read_file();
+            Server server(webserv);
+            server.initialize();
         }
         else
         {

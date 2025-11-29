@@ -15,11 +15,17 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <cstring>
+#include <fcntl.h>
+#include <sys/epoll.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <unistd.h>
+#include <signal.h>
 
 
 class Webserv 
 {
-    private:
+    protected:
         struct Location
         {
             std::string path;
@@ -31,7 +37,7 @@ class Webserv
             bool redirectionIsText;
             std::map<int, std::string> redirection;
             std::string upload_dir;
-            std::map<std::string, std::string> cgi_extension; // .py -> /usr/bin/python3
+            std::map<std::string, std::string> cgi_file; // .py -> file
             bool hasCgi;
         };
         struct Server
@@ -69,7 +75,7 @@ class Webserv
         bool checkForBrackets(void);
         bool checkDuplicatePorts(void) const;
         bool checkDuplicatePaths(void);
-        bool checkFileExtension(const std::string path) const;
+        bool checkFileExtension(const std::string path, const std::string extension) const;
         bool checkMaxBodySize(const std::string value);
         bool checkStatusCode(const std::string code) const;
         bool checkUrlText(size_t i, Location &location) const;

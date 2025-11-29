@@ -9,7 +9,7 @@ Webserv::Webserv(const std::string config_file_path) : config_file(config_file_p
 {
     if (!config_file.is_open())
         throw std::runtime_error("Error: Problem occured while opening the file.");
-    if (!checkFileExtension(config_file_path))
+    if (!checkFileExtension(config_file_path, ".conf"))
         throw std::runtime_error("Error: Unknown file extension, use '.conf' files.");
     if (this->isFileEmpty())
         throw std::runtime_error("Error: Config file is empty.");
@@ -17,14 +17,22 @@ Webserv::Webserv(const std::string config_file_path) : config_file(config_file_p
 
 Webserv::Webserv(const Webserv &theOtherObject)
 {
-    static_cast<void>(theOtherObject);
+    this->tokens = theOtherObject.tokens;
+    this->servers = theOtherObject.servers;
+    this->error_pages = theOtherObject.error_pages;
+    this->client_max_body_size = theOtherObject.client_max_body_size;
+    this->brackets = theOtherObject.brackets;
 }
 
 Webserv& Webserv::operator=(const Webserv &theOtherObject)
 {
     if (this != &theOtherObject)
     {
-        static_cast<void>(theOtherObject);
+        this->tokens = theOtherObject.tokens;
+        this->servers = theOtherObject.servers;
+        this->error_pages = theOtherObject.error_pages;
+        this->client_max_body_size = theOtherObject.client_max_body_size;
+        this->brackets = theOtherObject.brackets;
     }
     return *this;
 }
@@ -46,10 +54,9 @@ bool Webserv::isFileEmpty(void)
     return true;
 }
 
-bool Webserv::checkFileExtension(const std::string path) const
+bool Webserv::checkFileExtension(const std::string path, const std::string extension) const
 {
     size_t dot = path.rfind('.');
-    const std::string extension = ".conf";
 
     if (dot == std::string::npos || dot == 0)
         return false;
@@ -257,8 +264,6 @@ void Webserv::read_file(void)
                     i++;
                     has_body_size = true;
                 }
-                else if (tokens[i] == ";")
-                    i++;
                 else
                     throw std::runtime_error("Error: Unexpected token in http block: " + tokens[i]);
             }
@@ -294,50 +299,50 @@ void Webserv::read_file(void)
     if (checkDuplicatePaths())
         throw std::runtime_error("Error: Server has the same location path multiple times.");
 
-    std::cout << "ERROR PAGES\n";
-    for (std::map<std::string, std::string>::iterator it = error_pages.begin(); it != error_pages.end(); it++)
-        std::cout << "Error_page: " << it->first << " -> " << it->second << std::endl;
+    // std::cout << "ERROR PAGES\n";
+    // for (std::map<std::string, std::string>::iterator it = error_pages.begin(); it != error_pages.end(); it++)
+    //     std::cout << "Error_page: " << it->first << " -> " << it->second << std::endl;
     
-    std::cout << "MAX_CLIENT_BODY_SIZE: " << (client_max_body_size.empty() ? "Empty" : client_max_body_size) << std::endl;
-    for (size_t i = 0; i < servers.size(); i++)
-    {
-        std::cout << "\nSERVER[" << i << "]\n";
-        std::cout << "Listen: " << servers[i].ip_address <<  ":" << servers[i].port << std::endl;
-        std::cout << "Server Root: " << servers[i].root << std::endl;
-        for (size_t j = 0; j < servers[i].locations.size(); j++)
-        {
-            std::cout << "  \nLOCATION[" << j << "]\n";
-            std::cout << "    Path: " << j << " " << servers[i].locations[j].path << std::endl;
-            std::cout << "    Root: " << j << " " << servers[i].locations[j].root << std::endl;
-            for (size_t k = 0; k < servers[i].locations[j].index.size(); k++)
-            {
-                std::cout << "    Index: " << j << " " << servers[i].locations[j].index[k] << std::endl;
-            }
-            for (size_t k = 0; k < servers[i].locations[j].methods.size(); k++)
-            {
-                std::cout << "    Methods: " << j << " " << servers[i].locations[j].methods[k] << std::endl;
-            }
-            std::cout << "    Autoindex: " << j << " " << (servers[i].locations[j].autoindex ? "True" : "False") << std::endl;
-            std::cout << "    Redirection: " << j << " " << (servers[i].locations[j].isRedirection ? "True" : "False") << std::endl;
-            if (servers[i].locations[j].isRedirection)
-            {
-                std::map<int, std::string>::iterator it = servers[i].locations[j].redirection.begin();
-                std::cout << "    is Text: " << (servers[i].locations[j].redirectionIsText ? "True" : "False") << std::endl;
-                std::cout << "    Code & URL/TEXT: " << it->first << " -> " << "|" << it->second << "|" << std::endl;
-            }
-            std::cout << "    Upload: " << servers[i].locations[j].upload_dir << std::endl;
-            if (servers[i].locations[j].hasCgi)
-            {
-                std::map<std::string, std::string>::iterator it = servers[i].locations[j].cgi_extension.begin();
-                for (; it != servers[i].locations[j].cgi_extension.end(); it++)
-                {
-                    std::cout << "    Cgi: " << it->first << std::endl;
-                    std::cout << "    Path: " << it->second << std::endl;
-                }
-            }
-        }
-        std::cout << "-------------------------------------------------" << std::endl;
-    }
+    // std::cout << "MAX_CLIENT_BODY_SIZE: " << (client_max_body_size.empty() ? "Empty" : client_max_body_size) << std::endl;
+    // for (size_t i = 0; i < servers.size(); i++)
+    // {
+    //     std::cout << "\nSERVER[" << i << "]\n";
+    //     std::cout << "Listen: " << servers[i].ip_address <<  ":" << servers[i].port << std::endl;
+    //     std::cout << "Server Root: " << servers[i].root << std::endl;
+    //     for (size_t j = 0; j < servers[i].locations.size(); j++)
+    //     {
+    //         std::cout << "  \nLOCATION[" << j << "]\n";
+    //         std::cout << "    Path: " << j << " " << servers[i].locations[j].path << std::endl;
+    //         std::cout << "    Root: " << j << " " << servers[i].locations[j].root << std::endl;
+    //         for (size_t k = 0; k < servers[i].locations[j].index.size(); k++)
+    //         {
+    //             std::cout << "    Index: " << j << " " << servers[i].locations[j].index[k] << std::endl;
+    //         }
+    //         for (size_t k = 0; k < servers[i].locations[j].methods.size(); k++)
+    //         {
+    //             std::cout << "    Methods: " << j << " " << servers[i].locations[j].methods[k] << std::endl;
+    //         }
+    //         std::cout << "    Autoindex: " << j << " " << (servers[i].locations[j].autoindex ? "True" : "False") << std::endl;
+    //         std::cout << "    Redirection: " << j << " " << (servers[i].locations[j].isRedirection ? "True" : "False") << std::endl;
+    //         if (servers[i].locations[j].isRedirection)
+    //         {
+    //             std::map<int, std::string>::iterator it = servers[i].locations[j].redirection.begin();
+    //             std::cout << "    is Text: " << (servers[i].locations[j].redirectionIsText ? "True" : "False") << std::endl;
+    //             std::cout << "    Code & URL/TEXT: " << it->first << " -> " << "|" << it->second << "|" << std::endl;
+    //         }
+    //         std::cout << "    Upload: " << servers[i].locations[j].upload_dir << std::endl;
+    //         if (servers[i].locations[j].hasCgi)
+    //         {
+    //             std::map<std::string, std::string>::iterator it = servers[i].locations[j].cgi_file.begin();
+    //             for (; it != servers[i].locations[j].cgi_file.end(); it++)
+    //             {
+    //                 std::cout << "    extension: " << it->first << std::endl;
+    //                 std::cout << "    Path: " << it->second << std::endl;
+    //             }
+    //         }
+    //     }
+    //     std::cout << "-------------------------------------------------" << std::endl;
+    // }
 }
 
 bool Webserv::checkMaxBodySize(const std::string value)
@@ -587,15 +592,15 @@ bool Webserv::checkRoot(const std::string path) const
     return true;
 }
 
-void Webserv::saveExtensionPath(const std::string extension, const std::string path, Location &location)
-{
-    if ((extension == ".py" && path != "/usr/bin/python3") || (extension == ".php" && path != "/usr/bin/php"))
-        throw std::runtime_error("Error: Invalid path for " + extension + ".");
-    std::map<std::string, std::string>::iterator found = location.cgi_extension.find(extension);
-    if (found != location.cgi_extension.end())
-        throw std::runtime_error("Error: Duplicate in " + extension);
-    location.cgi_extension[extension] = path;
-}
+// void Webserv::saveExtensionPath(const std::string extension, const std::string path, Location &location)
+// {
+//     if ((extension == ".py" && path != "/usr/bin/python3") || (extension == ".php" && path != "/usr/bin/php"))
+//         throw std::runtime_error("Error: Invalid path for " + extension + ".");
+//     std::map<std::string, std::string>::iterator found = location.cgi_extension.find(extension);
+//     if (found != location.cgi_extension.end())
+//         throw std::runtime_error("Error: Duplicate in " + extension);
+//     location.cgi_extension[extension] = path;
+// }
 
 Webserv::Server Webserv::parseServer(size_t &i)
 {
@@ -705,6 +710,7 @@ void Webserv::parseLocation(size_t &i, Webserv::Server &server, int &depth, bool
     bool sawAutoIndex = false;
     bool sawRedirection = false;
     bool sawUpload = false;
+    bool sawCgi = false;
     i++;
     Location location;
     locationDefaultInit(location);
@@ -827,18 +833,21 @@ void Webserv::parseLocation(size_t &i, Webserv::Server &server, int &depth, bool
         }
         else if (tokens[i] == "cgi")
         {
+            if (sawCgi)
+                throw std::runtime_error("Error: Duplicate cgi directive.");
+            sawCgi = true;
             i++;
             location.hasCgi = true;
-            if (tokens[i] != ".py" && tokens[i] != ".php")
-                throw std::runtime_error("Error: Unknown extension for cgi.");
-            std::string extension = tokens[i];
-            i++;
             if (tokens[i] == ";")
-                throw std::runtime_error("Error: No path is provided to run the cgi.");
-            saveExtensionPath(extension, tokens[i], location);
+                throw std::runtime_error("Error: Empty cgi field.");
+            if (!checkFileExtension(tokens[i], ".py") && !checkFileExtension(tokens[i], ".php"))
+                throw std::runtime_error("Error: Unknown extension for cgi.");
+            std::string file = tokens[i];
             i++;
             if (tokens[i] != ";")
-                throw std::runtime_error("Error: Expected ';' after cgi path.");
+                throw std::runtime_error("Error: Expected ';' after cgi file.");
+            size_t pos = file.find('.');
+            location.cgi_file[file.substr(pos)] = file;
         }
         else if (tokens[i] != "root" && tokens[i] != "index" && tokens[i] != "allow_methods" && tokens[i] != "autoindex" && tokens[i] != ";")
             throw std::runtime_error("Error: Invalid directive '" + tokens[i] + "' inside location block.");
