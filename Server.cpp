@@ -7,9 +7,9 @@ Server::Server(Webserv webserv) : Webserv(webserv)
     signal(SIGINT, Server::handlingSigint);
 }
 
-Server::Server(const Server &theOtherObject)
+Server::Server(const Server &theOtherObject) : Webserv(theOtherObject)
 {
-   static_cast<void>(theOtherObject);
+   
 }
 
 Server& Server::operator=(const Server &theOtherObject)
