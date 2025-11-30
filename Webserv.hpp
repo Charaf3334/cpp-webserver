@@ -66,7 +66,7 @@ class Webserv
         bool checkValidListen(const std::string s, bool &isHost) const;
         bool isValidIp(const std::string ip) const;
         bool checkHost(const std::string host, bool &isHost) const;
-        std::string convertHostToIp(const std::string host); 
+        std::string convertHostToIp(const std::string host, const std::string message); 
         // bool checkServerName(const std::string s) const;
         void serverDefaultInit(Webserv::Server &server);
         void locationDefaultInit(Location &location);
@@ -78,7 +78,8 @@ class Webserv
         bool checkFileExtension(const std::string path, const std::string extension) const;
         bool checkMaxBodySize(const std::string value);
         bool checkStatusCode(const std::string code) const;
-        bool checkUrlText(size_t i, Location &location) const;
+        bool checkUrlText(size_t i, Location &location, bool code_present, int status_code);
+        bool isstrdigit(std::string str) const;
         unsigned long stringToUnsignedLong(const std::string str) const;
         bool isValidStatusCode(const std::string code);
         std::vector<std::string> semicolonBracketsFix(const std::vector<std::string> input);

@@ -420,7 +420,7 @@ bool Webserv::checkSemicolon(void) const
     return true;
 }
 
-std::string Webserv::convertHostToIp(const std::string host)
+std::string Webserv::convertHostToIp(const std::string host, const std::string message)
 {
     struct addrinfo hints;
     struct addrinfo *res = NULL;
@@ -430,7 +430,7 @@ std::string Webserv::convertHostToIp(const std::string host)
 
     int status = getaddrinfo(host.c_str(), NULL, &hints, &res);
     if (status != 0 || res == NULL)
-        throw std::runtime_error("Error: Listening address is invalid.");
+        throw std::runtime_error(message);
     char ip_string[INET_ADDRSTRLEN];
     struct sockaddr_in *ipv4 = reinterpret_cast<struct sockaddr_in *>(res->ai_addr);
     inet_ntop(AF_INET, &(ipv4->sin_addr), ip_string, sizeof(ip_string));
@@ -523,10 +523,24 @@ bool Webserv::checkStatusCode(const std::string code) const
     return true;
 }
 
-bool Webserv::checkUrlText(size_t i, Location &location) const
+bool Webserv::isstrdigit(std::string str) const
+{
+    for (size_t i = 0; i < str.length(); i++)
+    {
+        if (!isdigit(str[i]))
+            return false;
+    }
+    return true;
+}
+
+bool Webserv::checkUrlText(size_t i, Location &location, bool code_present, int status_code)
 {
     if (tokens[i].find('"') != std::string::npos)
     {
+        if (!code_present)
+            throw std::runtime_error("Error: Code before return text missing.");
+        if (status_code / 100 == 3)
+            throw std::runtime_error("Error: Code for return text incorrect.");
         location.redirectionIsText = true;
         if (tokens[i][0] != '"')
             return false;
@@ -545,7 +559,29 @@ bool Webserv::checkUrlText(size_t i, Location &location) const
         }
         return false;
     }
-    // this block where i will handle URL
+    else if (tokens[i][0] == '/' && tokens[i][1] != '/')
+    {
+        if (status_code != 301 && status_code != 302 && status_code != 303 && status_code != 307 && status_code != 308 && status_code != 444)
+            throw std::runtime_error("Error: Code for return path incorrect.");
+        return true;
+    }
+    else if (tokens[i][0] == 'h' && tokens[i][1] == 't' && tokens[i][2] == 't' && tokens[i][3] == 'p' && tokens[i][4] == ':'
+        && tokens[i][5] == '/' && tokens[i][6] == '/')
+    {
+        if (status_code != 301 && status_code != 302 && status_code != 303 && status_code != 307 && status_code != 308 && status_code != 444)
+            throw std::runtime_error("Error: Code for return path incorrect.");
+        std::string domain = tokens[i].substr(7);
+        size_t pos = domain.find('/');
+        if (pos != std::string::npos)
+        {
+            if (domain[pos + 1] == '/')
+                throw std::runtime_error("Error: Return path incorrect.");
+            domain = domain.substr(0, pos);
+        }
+        convertHostToIp(domain, "Error: Invalid domain name in return directive.");
+    }
+    else
+        return false;
     return true;
 }
 
@@ -629,7 +665,7 @@ Webserv::Server Webserv::parseServer(size_t &i)
                     throw std::runtime_error("Error: Listening address is invalid.");
             server.port = atoi(s.substr(s.find(':') + 1).c_str());
             if (isHost)
-                server.ip_address = convertHostToIp(s.substr(0, s.find(':')));
+                server.ip_address = convertHostToIp(s.substr(0, s.find(':')), "Error: Invalid listening host.");
             else
                 server.ip_address = s.substr(0, s.find(':'));
             i++;
@@ -791,6 +827,8 @@ void Webserv::parseLocation(size_t &i, Webserv::Server &server, int &depth, bool
         }
         else if (tokens[i] == "return")
         {
+            int status_code = 302;
+            bool code_present = false;
             if (sawRedirection)
                 throw std::runtime_error("Error: Duplicate return directive.");
             sawRedirection = true;
@@ -798,20 +836,24 @@ void Webserv::parseLocation(size_t &i, Webserv::Server &server, int &depth, bool
             i++;
             if (tokens[i] == ";")
                 throw std::runtime_error("Error: Expected CODE and URL/TEXT after return.");
-            if (!checkStatusCode(tokens[i]))
-                throw std::runtime_error("Error: Invalid status code.");
-            int status_code = atoi(tokens[i].c_str());
-            i++;
-            if (tokens[i] == ";")
-                throw std::runtime_error("Error: Expected URL/TEXT after status code.");
-            if (!checkUrlText(i, location))
+            if (isstrdigit(tokens[i]))
+            {
+                if (!checkStatusCode(tokens[i]))
+                    throw std::runtime_error("Error: Invalid status code.");
+                status_code = atoi(tokens[i].c_str());
+                code_present = true;
+                i++;
+                if (tokens[i] == ";")
+                    throw std::runtime_error("Error: Expected URL/TEXT after status code.");
+            }
+            if (!checkUrlText(i, location, code_present, status_code))
                 throw std::runtime_error("Error: Invalid TEXT/URL after status code.");
             if (location.redirectionIsText)
             {
                 tokens[i][0] = 0;
                 tokens[i][tokens[i].length() - 1] = 0;
             }
-            location.redirection[status_code] = tokens[i]; // still need to parse URL
+            location.redirection[status_code] = tokens[i];
             i++;
             if (tokens[i] != ";")
                 throw std::runtime_error("Error: Expected ';' at the end of return directive.");
