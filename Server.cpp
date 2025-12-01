@@ -70,6 +70,7 @@ void Server::handlingSigint(int sig)
 void Server::initialize(void)
 {
     int epoll_fd = epoll_create(MAX_EVENTS);
+    size_t countingFailedSockets = 0;
     if (epoll_fd == -1)
     {
         std::cerr << "Error: epoll_create failed" << std::endl;
@@ -81,10 +82,12 @@ void Server::initialize(void)
         if (sock_fd == -1)
         {
             std::cerr << "Error: Socket " << i + 1 << " failed." << std::endl;
+            countingFailedSockets++;
             continue;
         }
         if (!setNonBlockingFD(sock_fd))
         {
+            countingFailedSockets++;
             close(sock_fd);
             continue;
         }
@@ -94,12 +97,14 @@ void Server::initialize(void)
         if (bind(sock_fd, reinterpret_cast<sockaddr*>(&address), sizeof(address)) == -1)
         {
             std::cerr << "Error: Bind failed in socket " << i + 1 << "." << std::endl;
+            countingFailedSockets++;
             close(sock_fd);
             continue;
         }
         if (listen(sock_fd, SOMAXCONN) == -1)
         {
             std::cerr << "Error: Listen failed in socket " << i + 1 << "." << std::endl;
+            countingFailedSockets++;
             close(sock_fd);
             continue;
         }
@@ -109,6 +114,7 @@ void Server::initialize(void)
         if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, sock_fd, &ev) == -1)
         {
             std::cerr << "Error: ctl failed in socket " << i + 1 << "." << std::endl;
+            countingFailedSockets++;
             close(sock_fd);
             continue;
         }
@@ -116,7 +122,7 @@ void Server::initialize(void)
         std::cout << "Server " << i + 1 << " listening on: " << servers[i].ip_address << ":" << servers[i].port << std::endl;
     }
     epoll_event events[MAX_EVENTS];
-    while (!shutdownFlag)
+    while (!shutdownFlag && countingFailedSockets != servers.size())
     {
         int n = epoll_wait(epoll_fd, events, MAX_EVENTS, -1);
         for (int i = 0; i < n; i++)
