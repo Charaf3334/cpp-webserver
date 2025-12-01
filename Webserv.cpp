@@ -220,8 +220,8 @@ void Webserv::read_file(void)
                         if (isValidStatusCode(tokens[i]))
                         {
                             unsigned long num = stringToUnsignedLong(tokens[i]);
-                            if (num < 300 || num > 599)
-                                throw std::runtime_error("Error: Status code " + tokens[i] + " must be between 300 and 599");
+                            if (num < 400 || num > 599)
+                                throw std::runtime_error("Error: Status code " + tokens[i] + " must be between 400 and 599");
                             error_codes.push_back(tokens[i]);
                             i++;
                         }
