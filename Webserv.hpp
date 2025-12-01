@@ -39,6 +39,7 @@ class Webserv
             std::string upload_dir;
             std::map<std::string, std::string> cgi_file; // .py -> file
             bool hasCgi;
+            std::map<std::string, std::string> error_pages; // each location error pages
         };
         struct Server
         {
@@ -52,12 +53,14 @@ class Webserv
         std::ifstream config_file;
         std::vector<std::string> tokens;
         std::vector<Webserv::Server> servers;
-        std::map<std::string, std::string> error_pages;
+        std::map<std::string, std::string> error_pages; // global ones
         std::string client_max_body_size;
         std::stack<std::string> brackets;
+        std::string http_root;
         
         Server parseServer(size_t &i);
         void parseLocation(size_t &i, Webserv::Server &server, int &depth, bool &sawLocation);
+        void mergePaths(void);
 
         std::string* split(const std::string line);
         size_t countParts(const std::string line) const;
@@ -83,7 +86,6 @@ class Webserv
         unsigned long stringToUnsignedLong(const std::string str) const;
         bool isValidStatusCode(const std::string code);
         std::vector<std::string> semicolonBracketsFix(const std::vector<std::string> input);
-        void saveExtensionPath(const std::string extension, const std::string path, Location &location);
     public:
         Webserv();
         Webserv(const std::string config_file_path);

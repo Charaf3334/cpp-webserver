@@ -204,6 +204,8 @@ void Webserv::read_file(void)
                 throw std::runtime_error("Error: Expected '{' after http.");
             i++;
             bool has_body_size = false;
+            bool hasRoot = false;
+            http_root = "";
             while (i < tokens.size() && tokens[i] != "}" && tokens[i] != "server")
             {
                 if (tokens[i] == "error_page")
@@ -264,6 +266,22 @@ void Webserv::read_file(void)
                     i++;
                     has_body_size = true;
                 }
+                else if (tokens[i] == "root")
+                {
+                    if (hasRoot)
+                        throw std::runtime_error("Error: Duplicate root directive inside http block.");
+                    hasRoot = true;
+                    i++;
+                    if (tokens[i] == ";")
+                        throw std::runtime_error("Error: Empty root directive inside http block.");
+                    if (!checkRoot(tokens[i]))
+                        throw std::runtime_error("Error: Invalid path for root directive inside http block.");
+                    http_root = tokens[i];
+                    i++;
+                    if (tokens[i] != ";")
+                        throw std::runtime_error("Error: Expected ';' after root path inside http block.");
+                    i++;
+                }
                 else
                     throw std::runtime_error("Error: Unexpected token in http block: " + tokens[i]);
             }
@@ -298,6 +316,7 @@ void Webserv::read_file(void)
         throw std::runtime_error("Error: Multiple servers listen to same ports.");
     if (checkDuplicatePaths())
         throw std::runtime_error("Error: Server has the same location path multiple times.");
+    mergePaths();
 
     // std::cout << "ERROR PAGES\n";
     // for (std::map<std::string, std::string>::iterator it = error_pages.begin(); it != error_pages.end(); it++)
@@ -343,6 +362,46 @@ void Webserv::read_file(void)
     //     }
     //     std::cout << "-------------------------------------------------" << std::endl;
     // }
+}
+
+void Webserv::mergePaths(void)
+{
+    for (size_t i = 0; i < servers.size(); i++)
+    {
+        for (size_t j = 0; j < servers[i].locations.size(); j++)
+        {
+            std::string rooot = servers[i].locations[j].root;
+            std::string path = servers[i].locations[j].path;
+            if (path != "/")
+            {
+                size_t pos = path.find('/', 1);
+                if (pos == std::string::npos)
+                    path += "/";
+            }
+            for (size_t k = 0; k < servers[i].locations[j].index.size(); k++)
+            {
+                std::string index = rooot + path + servers[i].locations[j].index[k];
+                servers[i].locations[j].index[k] = index;
+            }
+            if (servers[i].locations[j].hasCgi)
+            {
+                std::map<std::string, std::string>::iterator it = servers[i].locations[j].cgi_file.begin();
+                std::string cgi_path = rooot + path + it->second;
+                servers[i].locations[j].cgi_file[it->first] = cgi_path;
+            }
+            std::map<std::string, std::string>::iterator it = error_pages.begin();
+            for (; it != error_pages.end(); it++)
+            {
+                std::string error_page_path = it->second;
+                if (error_page_path[0] == '.' && error_page_path[1] == '/')
+                    error_page_path = error_page_path.substr(2);
+                else if (error_page_path[0] == '/')
+                    error_page_path = error_page_path.substr(1);
+                std::string full_path = rooot + path + error_page_path;
+                servers[i].locations[j].error_pages[it->first] = full_path;
+            }
+        }
+    }
 }
 
 bool Webserv::checkMaxBodySize(const std::string value)
@@ -619,7 +678,7 @@ bool Webserv::checkPath(const std::string path) const
     return true;
 }
 
-bool Webserv::checkRoot(const std::string path) const
+bool Webserv::checkRoot(const std::string path) const // if path is like ../whatever, we should return 404 not found
 {
     if (path.empty())
         return false;
@@ -760,8 +819,8 @@ void Webserv::parseLocation(size_t &i, Webserv::Server &server, int &depth, bool
         throw std::runtime_error("Error: Expected '{' after path.");
     depth++;
     i++;
-    if (tokens[i] == "}" || tokens[i] == ";")
-        throw std::runtime_error("Error: Location block cannot be empty.");
+    // if (tokens[i] == "}" || tokens[i] == ";")
+    //     throw std::runtime_error("Error: Location block cannot be empty.");
 
     for (; i < tokens.size() && tokens[i] != "}"; i++)
     {
@@ -894,10 +953,12 @@ void Webserv::parseLocation(size_t &i, Webserv::Server &server, int &depth, bool
         else if (tokens[i] != "root" && tokens[i] != "index" && tokens[i] != "allow_methods" && tokens[i] != "autoindex" && tokens[i] != ";")
             throw std::runtime_error("Error: Invalid directive '" + tokens[i] + "' inside location block.");
     }
-    if (server.root.empty() && !sawRoot && !sawRedirection)
-        throw std::runtime_error("Error: Missing root inside location.");
+    if (server.root.empty() && !sawRoot && !sawRedirection && http_root.empty())
+        throw std::runtime_error("Error: Missing root.");
     else if (!server.root.empty() && !sawRoot) // zakaria if root is not in location but exists in server block overridih
         location.root = server.root;
+    else if (server.root.empty() && !sawRoot && !http_root.empty())
+        location.root = http_root;
     if (!sawIndex)
         location.index.push_back("index.html");
     if (!location.methods.size())
