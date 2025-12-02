@@ -57,6 +57,7 @@ class Webserv
         std::string client_max_body_size;
         std::stack<std::string> brackets;
         std::string http_root;
+        std::map<int, std::string> status_codes;
         
         Server parseServer(size_t &i);
         void parseLocation(size_t &i, Webserv::Server &server, int &depth, bool &sawLocation);
@@ -86,6 +87,8 @@ class Webserv
         unsigned long stringToUnsignedLong(const std::string str) const;
         bool isValidStatusCode(const std::string code);
         std::vector<std::string> semicolonBracketsFix(const std::vector<std::string> input);
+        void assignStatusCodes(void);
+        bool isCodeInMap(int code);
     public:
         Webserv();
         Webserv(const std::string config_file_path);

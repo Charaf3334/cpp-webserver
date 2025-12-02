@@ -13,6 +13,7 @@ Webserv::Webserv(const std::string config_file_path) : config_file(config_file_p
         throw std::runtime_error("Error: Unknown file extension, use '.conf' files.");
     if (this->isFileEmpty())
         throw std::runtime_error("Error: Config file is empty.");
+    assignStatusCodes();
 }
 
 Webserv::Webserv(const Webserv &theOtherObject)
@@ -22,6 +23,8 @@ Webserv::Webserv(const Webserv &theOtherObject)
     this->error_pages = theOtherObject.error_pages;
     this->client_max_body_size = theOtherObject.client_max_body_size;
     this->brackets = theOtherObject.brackets;
+    this->http_root = theOtherObject.http_root;
+    this->status_codes = theOtherObject.status_codes;
 }
 
 Webserv& Webserv::operator=(const Webserv &theOtherObject)
@@ -163,6 +166,79 @@ unsigned long Webserv::stringToUnsignedLong(const std::string str) const
     return result;
 }
 
+void Webserv::assignStatusCodes(void)
+{
+    status_codes[100] = "Continue";
+    status_codes[101] = "Switching Protocols";
+    status_codes[102] = "Processing";
+    status_codes[103] = "Early Hints";
+    status_codes[200] = "OK";
+    status_codes[201] = "Created";
+    status_codes[202] = "Accepted";
+    status_codes[203] = "Non-Authoritative Information";
+    status_codes[204] = "No Content";
+    status_codes[205] = "Reset Content";
+    status_codes[206] = "Partial Content";
+    status_codes[207] = "Multi-Status";
+    status_codes[208] = "Already Reported";
+    status_codes[226] = "IM Used";
+    status_codes[300] = "Multiple Choices";
+    status_codes[301] = "Moved Permanently";
+    status_codes[302] = "Found";
+    status_codes[303] = "See Other";
+    status_codes[304] = "Not Modified";
+    status_codes[307] = "Temporary Redirect";
+    status_codes[308] = "Permanent Redirect";
+    status_codes[400] = "Bad Request";
+    status_codes[401] = "Unauthorized";
+    status_codes[402] = "Payment Required";
+    status_codes[403] = "Forbidden";
+    status_codes[404] = "Not Found";
+    status_codes[405] = "Method Not Allowed";
+    status_codes[406] = "Not Acceptable";
+    status_codes[407] = "Proxy Authentication Required";
+    status_codes[408] = "Request Timeout";
+    status_codes[409] = "Conflict";
+    status_codes[410] = "Gone";
+    status_codes[411] = "Length Required";
+    status_codes[412] = "Precondition Failed";
+    status_codes[413] = "Content Too Large";
+    status_codes[414] = "URI Too Long";
+    status_codes[415] = "Unsupported Media Type";
+    status_codes[416] = "Range Not Satisfiable";
+    status_codes[417] = "Expectation Failed";
+    status_codes[418] = "I'm a teapot";
+    status_codes[421] = "Misdirected Request";
+    status_codes[422] = "Unprocessable Content";
+    status_codes[423] = "Locked";
+    status_codes[424] = "Failed Dependency";
+    status_codes[425] = "Too Early";
+    status_codes[426] = "Upgrade Required";
+    status_codes[428] = "Precondition Required";
+    status_codes[429] = "Too Many Requests";
+    status_codes[431] = "Request Header Fields Too Large";
+    status_codes[451] = "Unavailable For Legal Reasons";
+    status_codes[500] = "Internal Server Error";
+    status_codes[501] = "Not Implemented";
+    status_codes[502] = "Bad Gateway";
+    status_codes[503] = "Service Unavailable";
+    status_codes[504] = "Gateway Timeout";
+    status_codes[505] = "HTTP Version Not Supported";
+    status_codes[506] = "Variant Also Negotiates";
+    status_codes[507] = "Insufficient Storage";
+    status_codes[508] = "Loop Detected";
+    status_codes[510] = "Not Extended";
+    status_codes[511] = "Network Authentication Required";
+}
+
+bool Webserv::isCodeInMap(int code)
+{
+    std::map<int, std::string>::iterator found = status_codes.find(code);
+    if (found == status_codes.end())
+        return false;
+    return true;
+}
+
 bool Webserv::isValidStatusCode(const std::string code)
 {
     try
@@ -224,6 +300,8 @@ void Webserv::read_file(void)
                             unsigned long num = stringToUnsignedLong(tokens[i]);
                             if (num < 400 || num > 599)
                                 throw std::runtime_error("Error: Status code " + tokens[i] + " must be between 400 and 599");
+                            if (!isCodeInMap(num))
+                                throw std::runtime_error("Error: Not a valid http status code.");
                             error_codes.push_back(tokens[i]);
                             i++;
                         }
@@ -317,7 +395,6 @@ void Webserv::read_file(void)
     if (checkDuplicatePaths())
         throw std::runtime_error("Error: Server has the same location path multiple times.");
     mergePaths();
-
     // std::cout << "ERROR PAGES\n";
     // for (std::map<std::string, std::string>::iterator it = error_pages.begin(); it != error_pages.end(); it++)
     //     std::cout << "Error_page: " << it->first << " -> " << it->second << std::endl;
@@ -594,6 +671,7 @@ bool Webserv::isstrdigit(std::string str) const
 
 bool Webserv::checkUrlText(size_t i, Location &location, bool code_present, int status_code)
 {
+    bool isHttps = false;
     if (tokens[i].find('"') != std::string::npos)
     {
         if (!code_present)
@@ -624,12 +702,17 @@ bool Webserv::checkUrlText(size_t i, Location &location, bool code_present, int 
             throw std::runtime_error("Error: Code for return path incorrect.");
         return true;
     }
-    else if (tokens[i][0] == 'h' && tokens[i][1] == 't' && tokens[i][2] == 't' && tokens[i][3] == 'p' && tokens[i][4] == ':'
-        && tokens[i][5] == '/' && tokens[i][6] == '/')
+    else if ((tokens[i][0] == 'h' && tokens[i][1] == 't' && tokens[i][2] == 't' && tokens[i][3] == 'p' && tokens[i][4] == ':'
+        && tokens[i][5] == '/' && tokens[i][6] == '/') || (tokens[i][0] == 'h' && tokens[i][1] == 't' && tokens[i][2] == 't' && tokens[i][3] == 'p' && tokens[i][4] == 's'
+        && tokens[i][5] == ':' && tokens[i][6] == '/' && tokens[i][7] == '/'))
     {
+        if ((tokens[i][0] == 'h' && tokens[i][1] == 't' && tokens[i][2] == 't' && tokens[i][3] == 'p' && tokens[i][4] == 's' && tokens[i][5] == ':' && tokens[i][6] == '/' && tokens[i][7] == '/'))
+            isHttps = true;
         if (status_code != 301 && status_code != 302 && status_code != 303 && status_code != 307 && status_code != 308 && status_code != 444)
             throw std::runtime_error("Error: Code for return path incorrect.");
         std::string domain = tokens[i].substr(7);
+        if (isHttps)
+            domain = tokens[i].substr(8);
         size_t pos = domain.find('/');
         if (pos != std::string::npos)
         {
@@ -900,6 +983,8 @@ void Webserv::parseLocation(size_t &i, Webserv::Server &server, int &depth, bool
                 if (!checkStatusCode(tokens[i]))
                     throw std::runtime_error("Error: Invalid status code.");
                 status_code = atoi(tokens[i].c_str());
+                if (!isCodeInMap(status_code))
+                    throw std::runtime_error("Error: Not a valid status code.");
                 code_present = true;
                 i++;
                 if (tokens[i] == ";")

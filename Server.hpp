@@ -3,7 +3,7 @@
 
 #include "Webserv.hpp"
 
-#define MAX_EVENTS 10
+#define MAX_EVENTS 64
 
 class Server : public Webserv
 {
