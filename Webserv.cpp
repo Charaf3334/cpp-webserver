@@ -36,6 +36,8 @@ Webserv& Webserv::operator=(const Webserv &theOtherObject)
         this->error_pages = theOtherObject.error_pages;
         this->client_max_body_size = theOtherObject.client_max_body_size;
         this->brackets = theOtherObject.brackets;
+        this->http_root = theOtherObject.http_root;
+        this->status_codes = theOtherObject.status_codes;
     }
     return *this;
 }
