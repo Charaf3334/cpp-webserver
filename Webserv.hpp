@@ -58,6 +58,7 @@ class Webserv
         std::stack<std::string> brackets;
         std::string http_root;
         std::map<int, std::string> status_codes;
+        std::map<std::string, std::string> content_type;
         
         Server parseServer(size_t &i);
         void parseLocation(size_t &i, Webserv::Server &server, int &depth, bool &sawLocation);
@@ -89,6 +90,7 @@ class Webserv
         std::vector<std::string> semicolonBracketsFix(const std::vector<std::string> input);
         void assignStatusCodes(void);
         bool isCodeInMap(int code);
+        void assignContentType(void);
     public:
         Webserv();
         Webserv(const std::string config_file_path);

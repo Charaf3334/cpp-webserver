@@ -14,6 +14,7 @@ Webserv::Webserv(const std::string config_file_path) : config_file(config_file_p
     if (this->isFileEmpty())
         throw std::runtime_error("Error: Config file is empty.");
     assignStatusCodes();
+    assignContentType();
 }
 
 Webserv::Webserv(const Webserv &theOtherObject)
@@ -25,6 +26,7 @@ Webserv::Webserv(const Webserv &theOtherObject)
     this->brackets = theOtherObject.brackets;
     this->http_root = theOtherObject.http_root;
     this->status_codes = theOtherObject.status_codes;
+    this->content_type = theOtherObject.content_type;
 }
 
 Webserv& Webserv::operator=(const Webserv &theOtherObject)
@@ -38,6 +40,7 @@ Webserv& Webserv::operator=(const Webserv &theOtherObject)
         this->brackets = theOtherObject.brackets;
         this->http_root = theOtherObject.http_root;
         this->status_codes = theOtherObject.status_codes;
+        this->content_type = theOtherObject.content_type;
     }
     return *this;
 }
@@ -231,6 +234,89 @@ void Webserv::assignStatusCodes(void)
     status_codes[508] = "Loop Detected";
     status_codes[510] = "Not Extended";
     status_codes[511] = "Network Authentication Required";
+}
+
+void Webserv::assignContentType(void)
+{
+    content_type[".aac"] = "audio/aac";
+    content_type[".abw"] = "application/x-abiword";
+    content_type[".apng"] = "image/apng";
+    content_type[".arc"] = "application/x-freearc";
+    content_type[".avif"] = "image/avif";
+    content_type[".azw"] = "application/vnd.amazon.ebook";
+    content_type[".avi"] = "video/x-msvideo";
+    content_type[".bin"] = "application/octet-stream";
+    content_type[".bmp"] = "image/bmp";
+    content_type[".bz"] = "application/x-bzip";
+    content_type[".bz2"] = "application/x-bzip2";
+    content_type[".cda"] = "application/x-cdf";
+    content_type[".csh"] = "application/x-csh";
+    content_type[".css"] = "text/css";
+    content_type[".csv"] = "text/csv";
+    content_type[".doc"] = "application/msword";
+    content_type[".docx"] = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+    content_type[".eot"] = "application/vnd.ms-fontobject";
+    content_type[".epub"] = "application/epub+zip";
+    content_type[".gz"] = "application/gzip";
+    content_type[".gif"] = "image/gif";
+    content_type[".htm"] = "text/html";
+    content_type[".html"] = "text/html";
+    content_type[".ico"] = "image/vnd.microsoft.icon";
+    content_type[".ics"] = "text/calendar";
+    content_type[".jar"] = "application/java-archive";
+    content_type[".jpeg"] = "image/jpeg";
+    content_type[".jpg"] = "image/jpeg";
+    content_type[".js"] = "text/javascript";
+    content_type[".json"] = "application/json";
+    content_type[".jsonld"] = "application/ld+json";
+    content_type[".md"] = "text/markdown";
+    content_type[".mid"] = "audio/midi";
+    content_type[".midi"] = "audio/midi";
+    content_type[".mjs"] = "text/javascript";
+    content_type[".mp3"] = "audio/mpeg";
+    content_type[".mp4"] = "video/mp4";
+    content_type[".mpeg"] = "video/mpeg";
+    content_type[".mpkg"] = "application/vnd.apple.installer+xml";
+    content_type[".odp"] = "application/vnd.oasis.opendocument.presentation";
+    content_type[".ods"] = "application/vnd.oasis.opendocument.spreadsheet";
+    content_type[".odt"] = "application/vnd.oasis.opendocument.text";
+    content_type[".oga"] = "audio/ogg";
+    content_type[".ogv"] = "video/ogg";
+    content_type[".ogx"] = "application/ogg";
+    content_type[".opus"] = "audio/ogg";
+    content_type[".otf"] = "font/otf";
+    content_type[".png"] = "image/png";
+    content_type[".pdf"] = "application/pdf";
+    content_type[".php"] = "application/x-httpd-php";
+    content_type[".ppt"] = "application/vnd.ms-powerpoint";
+    content_type[".pptx"] = "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+    content_type[".rar"] = "application/vnd.rar";
+    content_type[".rtf"] = "application/rtf";
+    content_type[".sh"] = "application/x-sh";
+    content_type[".svg"] = "image/svg+xml";
+    content_type[".tar"] = "application/x-tar";
+    content_type[".tif"] = "image/tiff";
+    content_type[".tiff"] = "image/tiff";
+    content_type[".ts"] = "video/mp2t";
+    content_type[".ttf"] = "font/ttf";
+    content_type[".txt"] = "text/plain";
+    content_type[".vsd"] = "application/vnd.visio";
+    content_type[".wav"] = "audio/wav";
+    content_type[".weba"] = "audio/webm";
+    content_type[".webm"] = "video/webm";
+    content_type[".webmanifest"] = "application/manifest+json";
+    content_type[".webp"] = "image/webp";
+    content_type[".woff"] = "font/woff";
+    content_type[".woff2"] = "font/woff2";
+    content_type[".xhtml"] = "application/xhtml+xml";
+    content_type[".xls"] = "application/vnd.ms-excel";
+    content_type[".xlsx"] = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    content_type[".xml"] = "application/xml";
+    content_type[".xul"] = "application/vnd.mozilla.xul+xml";
+    content_type[".zip"] = "application/zip";
+    content_type[".3gp"] = "video/3gpp";
+    content_type[".3g2"] = "video/3gpp2";
+    content_type[".7z"] = "application/x-7z-compressed";
 }
 
 bool Webserv::isCodeInMap(int code)
