@@ -54,3 +54,15 @@ to do:
 
     ./auto/configure --prefix=$HOME/nginx
     make; make install
+
+
+
+
+
+
+    tests that shouldn't pass but pass for now: 
+    - printf "GET / HTTP/1.1\r\r\n" | nc localhost 8080
+    - printf "GET / HTTP/1.1\r\n\n" | nc localhost 8080
+    - printf "GET / HTTP/1.1\r\n\r" | nc localhost 8080
+    - printf "GET / HTTP/1.1\n\r\n" | nc localhost 8080
+    - printf "GET /\r HTTP/1.1\r\n" | nc localhost 8080

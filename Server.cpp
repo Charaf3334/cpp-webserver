@@ -182,7 +182,7 @@ std::vector<std::string> Server::splitRequest(std::string request_string)
 bool Server::parseRequest(int client_fd, std::string request_string, Server::Request request) // this is the core function that processes the http requests our webserver receives
 {
     (void)request;
-    std::vector<std::string> lines = splitRequest(request_string);
+    std::vector<std::string> lines = splitRequest(request_string); // this function needs a solid logic to not pass when \r\n are not in appropriate places
     for (size_t i = 0; i < lines.size(); i++)
     {
         std::string line = lines[i];
