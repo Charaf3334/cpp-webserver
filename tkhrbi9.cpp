@@ -1,58 +1,76 @@
 #include <iostream>
 #include <vector>
+#include "Webserv.hpp"
 
-// std::vector<std::string> getLines(const std::string& req)
-// {
-//     std::vector<std::string> lines;
-//     std::string curr;
-
-//     for (size_t i = 0; i < req.size();)
-//     {
-//         if (req[i] == '\r')
-//         {
-//             if (i + 1 >= req.size() || req[i + 1] != '\n')
-//                 throw std::runtime_error("400 Bad Request: malformed CRLF");
-//             lines.push_back(curr);
-//             curr.clear();
-//             i += 2;
-
-//             if (i < req.size() && req[i] == '\r')
-//             {
-//                 if (i + 1 < req.size() && req[i + 1] == '\n')
-//                 {
-//                     lines.push_back("");
-//                     i += 2;
-//                 }
-//                 else
-//                     throw std::runtime_error("400 Bad Request: malformed CRLF");
-//             }
-//         }
-//         else if (req[i] == '\n')
-//             throw std::runtime_error("400 Bad Request: LF without CR");
-//         else
-//         {
-//             curr += req[i];
-//             i++;
-//         }
-//     }
-//     return lines;
-// }
-
-std::vector<std::string> getheadersLines(const std::string& req)
+int count_words(const std::string *words)
 {
+	int count = 0;
+	while (!words[count].empty())
+		count++;
+	return count;
+}
+
+size_t countParts(const std::string line)
+{
+    size_t count = 0;
+    bool in_exp = false;
+    bool in_quotes = false;
+
+    for (size_t i = 0; i < line.size(); i++)
+    {
+        if (line[i] == '"')
+            in_quotes = !in_quotes;
+        else if (!in_quotes && isspace(line[i]))
+            in_exp = false;
+        else
+        {
+            if (!in_exp)
+            {
+                count++;
+                in_exp = true;
+            }
+        }
+    }
+    return count;
+}
+
+std::string* split(const std::string &line)
+{
+    size_t count = countParts(line);
+    std::string* parts = new std::string[count];
+    size_t i = 0;
+    size_t idx = 0;
+    bool in_quotes = false;
+    size_t size = line.size();
+
+    while (i < size && idx < count)
+    {
+        while (i < size && isspace(line[i]) && !in_quotes)
+            i++;
+        if (i >= size)
+            break;
+
+        size_t j = i;
+        while (j < size)
+        {
+            if (line[j] == '"')
+                in_quotes = !in_quotes;
+            else if (!in_quotes && isspace(line[j]))
+                break;
+            j++;
+        }
+        parts[idx++] = line.substr(i, j - i);
+        i = j;
+    }
+    return parts;
+}
+
+std::vector<std::string> getheadersLines(const std::string& req){
 	std::string sub_req;
 	int pos = req.find("\r\n\r\n");
 	if (pos == std::string::npos)
 		throw std::runtime_error("400 Bad Request: headers should end with CRLF");
 	sub_req = req.substr(0, pos);
-	// std::cout << "sub_req: |" << sub_req  << "|"<< std::endl;
-
-	// std::string error_comb[] = {"\r\r", "\n\n", "\n\r"};
-	// for (int i = 0; i < 3; i++)
-	// {
-	// 	if (sub_req.find(error_comb[i]) != std::string::npos)
-	// 		throw std::runtime_error("400 Bad Request: incorrect CRLF");
-	// }
 
 
 	std::vector<std::string> lines;
@@ -71,18 +89,147 @@ std::vector<std::string> getheadersLines(const std::string& req)
 	return lines;
 }
 
-// bool parse_lines
+bool parse_path(std::string &path){
+	
+    if (path.empty() || path[0] != '/')
+		return false;
+	if (path.find("//") != std::string::npos)
+		return false;
+    for (size_t i = 0; i < path.length(); i++)
+    {
+        if (!isalnum(path[i]) && path[i] != '/' && path[i] != '_' && path[i] != '-' && path[i] != '.')
+            return false;
+    }
+    if (path.size() > 1 && path[path.size() - 1] == '/')
+        return false;
+    return true;
+}
 
-int main(void)
+bool check_allowedfirst(std::string &first)
 {
+	// std::string allowed_first = "!#$%&'*+-.^_`|~:";
+	for(int i = 0; i < first.size(); i++)
+	{
+		if (isalnum(first[i]) || first[i] == '-' || first[i] == ':')
+			continue ;
+		else
+			return false;
+		// for (int j = 0; j < allowed_first.size(); j++)
+		// {
+		// 	if (first[i] == allowed_first[j])
+		// 		break;
+		// 	if (j == allowed_first.size() - 1)
+		// 		return false;
+		// }
+	}
+	return true;
+}
+
+bool one_string_case(std::string &str, std::map<std::string, std::string>&map)
+{
+	if (str.empty()){
+		std::cerr << "400 Bad Request: header empty" << std::endl;
+		return false;
+	}
+	int pos = str.find(':');
+	if (pos == std::string::npos){
+		std::cerr << "400 Bad Request: character ':' missing in header" << std::endl;
+		return false;
+	}
+	if (pos == str.size() - 2){
+		std::cerr << "400 Bad Request: header value missing" << std::endl;
+		return false;
+	}
+	std::string first = str.substr(0, pos + 1);
+	if (first.size() == 1 || !check_allowedfirst(first)){
+		std::cerr << "400 Bad Request: invalid header" << std::endl;
+		return false;
+	}
+	std::string second = str.substr(pos + 2);
+	map[first] = second;
+	return true;
+}
+
+bool two_string_case(std::string *words, std::map<std::string, std::string>&map)
+{
+	size_t size = words[0].size();
+	if (size == 1){
+		std::cerr << "400 Bad Request: invalid header" << std::endl;
+		return false;
+	}
+	int pos = words[0].find(':');
+	if (pos == std::string::npos){
+		std::cerr << "400 Bad Request: character ':' missing in header" << std::endl;
+		return false;
+	}
+	if (pos != size - 2){
+		std::cerr << "400 Bad Request: character ':' is not in the end of the header" << std::endl;
+		return false;
+	}
+	if (!check_allowedfirst(words[0])){
+		std::cerr << "400 Bad Request: invalid header" << std::endl;
+		return false;
+	}
+	map[words[0]] = words[1];
+	return true;
+}
+
+bool parse_lines(std::vector<std::string> &lines){
+	std::string *words;
+
+	for (int i = 0; i < lines.size(); i++)
+	{
+//--------------------------------------METHOD--------------------------------------
+		words = split(lines[i]);
+		int size = count_words(words);
+		if (i == 0 && size != 3){
+			std::cerr << "400 Bad Request: methode line incorrect" << std::endl;
+			return false;
+		}
+		else if (i == 0){
+			if (words[0] != "GET" || words[0] != "POST" || words[0] != "DELETE"){
+				std::cerr << "400 Bad Request: methode not allowed" << std::endl;
+				return false;
+			}
+			if (!parse_path(words[1])){
+				std::cerr << "400 Bad Request: bad methode path" << std::endl;
+				return false;
+			}
+			if (words[2] != "HTTP/1.0" && words[2] != "HTTP/1.1"){
+				std::cerr << "400 Bad Request: HTTP protocole not correct" << std::endl;
+				return false;
+			}
+		}
+//--------------------------------------HEADERS--------------------------------------
+		std::map<std::string, std::string>map;
+		if (i > 0 && (size != 2 && size != 1)){
+			std::cerr << "400 Bad Request: header line incorrect" << std::endl;
+			return false;
+		}
+		else if (i > 0)
+		{
+			if (size == 1){
+				if (!one_string_case(words[0], map))
+					return false;
+			}
+			else{
+				if (!two_string_case(words, map))
+					return false;
+			}
+		}
+	}
+	return true;
+}
+
+int main(void){
 	try
 	{
-		std::string request = "GET /php_cgi/cat.png HTTP/1.1\r\nHOST: localhost\r\nlanguage:eng\r\nzbi\r\nzbi2\r\nzbi3\r\nzbi4\r\nzbi4\r\n\r\n";
-		std::vector<std::string> lines = getheadersLines(request);
-		for (int i = 0; i < lines.size(); i++)
-		{
-			std::cout << "|" << lines[i] << "|" << std::endl;
-		}
+		// std::string request = "GET /php_cgi/cat.png HTTP/1.1\r\nHOST: localhost\r\nlanguage:eng\r\nlanguage:eng\r\n\r\n";
+		// std::vector<std::string> lines = getheadersLines(request);
+		// parse_lines(lines);
+		std::map<std::string, std::string>map;
+		std::string str = "HOST: localhost";
+		one_string_case(str, map);
 	}
 	catch (const std::exception& e)
 	{
