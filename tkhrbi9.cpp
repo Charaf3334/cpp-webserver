@@ -2,14 +2,6 @@
 #include <vector>
 #include "Webserv.hpp"
 
-int count_words(const std::string *words)
-{
-	int count = 0;
-	while (!words[count].empty())
-		count++;
-	return count;
-}
-
 size_t countParts(const std::string line)
 {
     size_t count = 0;
@@ -100,8 +92,6 @@ bool parse_path(std::string &path){
         if (!isalnum(path[i]) && path[i] != '/' && path[i] != '_' && path[i] != '-' && path[i] != '.')
             return false;
     }
-    if (path.size() > 1 && path[path.size() - 1] == '/')
-        return false;
     return true;
 }
 
@@ -125,6 +115,14 @@ bool check_allowedfirst(std::string &first)
 	return true;
 }
 
+std::string str_tolower(std::string str)
+{
+	std::string result = str;
+	for (int i = 0; i < str.size(); i++)
+		result[i] = std::tolower((unsigned char)str[i]);
+	return result;
+}
+
 bool one_string_case(std::string &str, std::map<std::string, std::string>&map)
 {
 	if (str.empty()){
@@ -136,16 +134,17 @@ bool one_string_case(std::string &str, std::map<std::string, std::string>&map)
 		std::cerr << "400 Bad Request: character ':' missing in header" << std::endl;
 		return false;
 	}
-	if (pos == str.size() - 2){
+	if (pos == str.size() - 1){
 		std::cerr << "400 Bad Request: header value missing" << std::endl;
 		return false;
 	}
 	std::string first = str.substr(0, pos + 1);
+	first = str_tolower(first);
 	if (first.size() == 1 || !check_allowedfirst(first)){
 		std::cerr << "400 Bad Request: invalid header" << std::endl;
 		return false;
 	}
-	std::string second = str.substr(pos + 2);
+	std::string second = str.substr(pos + 1);
 	map[first] = second;
 	return true;
 }
@@ -162,7 +161,7 @@ bool two_string_case(std::string *words, std::map<std::string, std::string>&map)
 		std::cerr << "400 Bad Request: character ':' missing in header" << std::endl;
 		return false;
 	}
-	if (pos != size - 2){
+	if (pos != size - 1){
 		std::cerr << "400 Bad Request: character ':' is not in the end of the header" << std::endl;
 		return false;
 	}
@@ -170,7 +169,42 @@ bool two_string_case(std::string *words, std::map<std::string, std::string>&map)
 		std::cerr << "400 Bad Request: invalid header" << std::endl;
 		return false;
 	}
+	words[0] = str_tolower(words[0]);
 	map[words[0]] = words[1];
+	return true;
+}
+
+bool parse_methode(std::string *words){
+	std::string http_versions[] = {"HTTP/0.9", "HTTP/1.0", "HTTP/1.1", "HTTP/2.0", "HTTP/3.0"};
+	std::string http_methodes[] = {"GET", "POST", "DELETE", "PATCH", "PUT", "HEAD", "OPTIONS"};
+	for (int j = 0; j < 7; j++){
+		if (words[0] == http_methodes[j])
+			break;
+		if (j == 6){
+			std::cerr << "400 Bad Request: HTTP methode not correct" << std::endl;
+			return false;
+		}
+	}
+	if (words[0] != "GET" && words[0] != "POST" && words[0] != "DELETE"){
+		std::cerr << "400 Bad Request: HTTP methode not allowed" << std::endl;
+		return false;
+	}
+	if (!parse_path(words[1])){
+		std::cerr << "400 Bad Request: bad HTTP methode path" << std::endl;
+		return false;
+	}
+	for (int i = 0; i < 5; i++){
+		if (words[2] == http_versions[i])
+			break;
+		if (i == 4){
+			std::cerr << "400 Bad Request: HTTP protocole not correct" << std::endl;
+			return false;
+		}
+	}
+	if (words[2] != "HTTP/1.0" && words[2] != "HTTP/1.1"){
+		std::cerr << "505 Bad Request: HTTP protocole version not supported" << std::endl;
+		return false;
+	}
 	return true;
 }
 
@@ -179,26 +213,16 @@ bool parse_lines(std::vector<std::string> &lines){
 
 	for (int i = 0; i < lines.size(); i++)
 	{
-//--------------------------------------METHOD--------------------------------------
+		int size = countParts(lines[i]);
 		words = split(lines[i]);
-		int size = count_words(words);
+//--------------------------------------METHOD--------------------------------------
 		if (i == 0 && size != 3){
-			std::cerr << "400 Bad Request: methode line incorrect" << std::endl;
+			std::cerr << "400 Bad Request: HTTP methode line incorrect" << std::endl;
 			return false;
 		}
 		else if (i == 0){
-			if (words[0] != "GET" || words[0] != "POST" || words[0] != "DELETE"){
-				std::cerr << "400 Bad Request: methode not allowed" << std::endl;
+			if (!parse_methode(words))
 				return false;
-			}
-			if (!parse_path(words[1])){
-				std::cerr << "400 Bad Request: bad methode path" << std::endl;
-				return false;
-			}
-			if (words[2] != "HTTP/1.0" && words[2] != "HTTP/1.1"){
-				std::cerr << "400 Bad Request: HTTP protocole not correct" << std::endl;
-				return false;
-			}
 		}
 //--------------------------------------HEADERS--------------------------------------
 		std::map<std::string, std::string>map;
@@ -221,18 +245,20 @@ bool parse_lines(std::vector<std::string> &lines){
 	return true;
 }
 
-int main(void){
-	try
-	{
-		// std::string request = "GET /php_cgi/cat.png HTTP/1.1\r\nHOST: localhost\r\nlanguage:eng\r\nlanguage:eng\r\n\r\n";
-		// std::vector<std::string> lines = getheadersLines(request);
-		// parse_lines(lines);
-		std::map<std::string, std::string>map;
-		std::string str = "HOST: localhost";
-		one_string_case(str, map);
-	}
-	catch (const std::exception& e)
-	{
-		std::cerr << e.what() << '\n';
-	}
-}
+// int main(void){
+// 	try
+// 	{
+// 		std::string request = "GET /php_cgi/cat.png HTTP/1.1\r\nHOST: localhost\r\nlanguage:eng\r\nlanguage:eng\r\n\r\n";
+// 		std::vector<std::string> lines = getheadersLines(request);
+// 		parse_lines(lines);
+
+// 		std::map<std::string, std::string>map;
+// 		std::string str[] = {"Host:", "localhost"};
+// 		if (!two_string_case(str, map))
+// 			return 1;
+// 	}
+// 	catch (const std::exception& e)
+// 	{
+// 		std::cerr << e.what() << '\n';
+// 	}
+// }
