@@ -126,7 +126,11 @@ std::string Server::readRequest(int client_fd)
     {
         bytes = read(client_fd, temp_buffer, sizeof(temp_buffer));
         if (bytes <= 0) // connection closed or error
+        {
+            if (bytes == 0)
+                std::cerr << "User Disconnected" << std::endl;
             break;
+        }
         request.append(temp_buffer, bytes);
         if (!isParsed)
         {
@@ -223,8 +227,10 @@ bool Server::parse_path(std::string &path)
 bool Server::parse_methode(std::string *words, int &error_status, Server::Request &request)
 {
     std::string http_versions[] = {"HTTP/0.9", "HTTP/1.0", "HTTP/1.1", "HTTP/2.0", "HTTP/3.0"};
+    size_t http_versions_length = sizeof(http_versions) / sizeof(http_versions[0]);
 	std::string http_methodes[] = {"GET", "POST", "DELETE", "PATCH", "PUT", "HEAD", "OPTIONS"};
-	for (int j = 0; j < 7; j++)
+    size_t http_methodes_length = sizeof(http_methodes) / sizeof(http_methodes[0]);
+	for (size_t j = 0; j < http_methodes_length; j++)
     {
 		if (words[0] == http_methodes[j])
 			break;
@@ -244,7 +250,7 @@ bool Server::parse_methode(std::string *words, int &error_status, Server::Reques
 		error_status = 400;
 		return false;
 	}
-	for (int i = 0; i < 5; i++)
+	for (size_t i = 0; i < http_versions_length; i++)
     {
 		if (words[2] == http_versions[i])
 			break;
@@ -324,8 +330,18 @@ bool Server::one_string_case(std::string &str, Server::Request &request, int &er
         error_status = 400;
 		return false;
     }
+    first = first.substr(0, pos);
 	std::string second = str.substr(pos + 1);
-	request.headers[first.substr(0, pos)] = second;
+    if (request.http_version == "HTTP/1.1")
+    {
+        std::map<std::string, std::string>::iterator found = request.headers.find(first);
+        if (found != request.headers.end() && (first == "host" || first == "content-length" || first == "transfer-encoding"))
+        {
+            error_status = 400;
+            return false;
+        }
+    }
+	request.headers[first] = second;
 	return true;
 }
 
@@ -360,7 +376,17 @@ bool Server::two_string_case(std::string *words, Server::Request &request, int &
 		error_status = 400;
 		return false;
 	}
-	request.headers[words[0].substr(0, pos)] = words[1];
+    std::string key = words[0].substr(0, pos);
+    if (request.http_version == "HTTP/1.1")
+    {
+        std::map<std::string, std::string>::iterator found = request.headers.find(key);
+        if (found != request.headers.end() && (key == "host" || key == "content-length" || key == "transfer-encoding"))
+        {
+            error_status = 400;
+            return false;
+        }
+    }
+	request.headers[key] = words[1];
 	return true;
 }
 
@@ -411,6 +437,19 @@ bool Server::parse_lines(std::vector<std::string> lines, Server::Request &reques
 		}
         delete[] words;
 	}
+    if (request.http_version == "HTTP/1.1")
+    {
+        std::map<std::string, std::string>::iterator found = request.headers.find("host");
+        if (found == request.headers.end())
+        {
+            error_status = 400;
+            return false;
+        }
+        if (request.method == "POST")
+        {
+            // here we need to check for content-length and transfer-encoding
+        }
+    }
 	return true;
 }
 
@@ -418,6 +457,11 @@ bool Server::parseRequest(int client_fd, std::string request_string, Server::Req
 {
     bool flag = true;
     int error_status = 0;
+    if (request_string.empty())
+    {
+        error_status = 400;
+        return false;
+    }
     std::vector<std::string> lines = getheadersLines(request_string, flag, error_status);
     if (!flag)
     {
@@ -511,7 +555,7 @@ void Server::initialize(void)
                 int client_fd = accept(fd, reinterpret_cast<sockaddr*>(&client_addr), &client_len);
                 if (client_fd != -1)
                 {
-                    // std::cout << "New client connected ..." << std::endl;
+                    std::cout << "New client connected ..." << std::endl;
                     setNonBlockingFD(client_fd);
                     epoll_event ev;
                     ev.events = EPOLLIN;
@@ -522,13 +566,15 @@ void Server::initialize(void)
             else
             {
                 std::string request_string = readRequest(fd);
+                if (request_string.empty()) // keeping connection alive until user disconnects
+                { 
+                    close(fd);
+                    continue;
+                }   
                 std::cout << request_string << std::endl;
                 Server::Request request;
                 if (!parseRequest(fd, request_string, request))
-                {
-                    close(fd);
                     continue;
-                }
 
                 // testing dynamic responses
                 int status = 0;
