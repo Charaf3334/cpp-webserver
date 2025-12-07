@@ -574,7 +574,10 @@ void Server::initialize(void)
                 std::cout << request_string << std::endl;
                 Server::Request request;
                 if (!parseRequest(fd, request_string, request))
+                {
+                    close(fd);
                     continue;
+                }
 
                 // testing dynamic responses
                 int status = 0;
