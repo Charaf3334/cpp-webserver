@@ -57,14 +57,15 @@ std::string* split(const std::string &line)
     return parts;
 }
 
-std::vector<std::string> getheadersLines(const std::string& req){
+std::vector<std::string> getheadersLines(const std::string req)
+{
 	std::string sub_req;
 	int pos = req.find("\r\n\r\n");
 	if (pos == std::string::npos)
 		throw std::runtime_error("400 Bad Request: headers should end with CRLF");
+	if (pos == 0)
+		throw std::runtime_error("400 Bad Request: request empty");
 	sub_req = req.substr(0, pos);
-
-
 	std::vector<std::string> lines;
 	int start = 0;
 	for (int j = 0; j < sub_req.size(); j++)
@@ -78,6 +79,8 @@ std::vector<std::string> getheadersLines(const std::string& req){
 		else if (!std::isprint(sub_req[j]))
 			throw std::runtime_error("400 Bad Request: invalid character");
 	}
+	if (lines.size() == 1)
+		throw std::runtime_error("400 bad Request: Headers missing");
 	return lines;
 }
 
@@ -118,12 +121,12 @@ bool check_allowedfirst(std::string &first)
 std::string str_tolower(std::string str)
 {
 	std::string result = str;
-	for (int i = 0; i < str.size(); i++)
+	for (size_t i = 0; i < str.size(); i++)
 		result[i] = std::tolower((unsigned char)str[i]);
 	return result;
 }
 
-bool one_string_case(std::string &str, std::map<std::string, std::string>&map)
+bool one_string_case(std::string &str, std::map<std::string, std::string> &map)
 {
 	if (str.empty()){
 		std::cerr << "400 Bad Request: header empty" << std::endl;
@@ -136,6 +139,10 @@ bool one_string_case(std::string &str, std::map<std::string, std::string>&map)
 	}
 	if (pos == str.size() - 1){
 		std::cerr << "400 Bad Request: header value missing" << std::endl;
+		return false;
+	}
+	if (str[pos + 1] == ':'){
+		std::cerr << "400 Bad Request: character ':' invalid" << std::endl;
 		return false;
 	}
 	std::string first = str.substr(0, pos + 1);
@@ -170,6 +177,11 @@ bool two_string_case(std::string *words, std::map<std::string, std::string>&map)
 		return false;
 	}
 	words[0] = str_tolower(words[0]);
+	int tmp = words[1].find(':');
+	if (tmp != std::string::npos && tmp == 0){
+		std::cerr << "400 Bad Request: character ':' is invalid" << std::endl;
+		return false;
+	}
 	map[words[0]] = words[1];
 	return true;
 }
@@ -206,6 +218,7 @@ bool parse_methode(std::string *words){
 		return false;
 	}
 	return true;
+
 }
 
 bool parse_lines(std::vector<std::string> &lines){
@@ -245,20 +258,17 @@ bool parse_lines(std::vector<std::string> &lines){
 	return true;
 }
 
-// int main(void){
-// 	try
-// 	{
-// 		std::string request = "GET /php_cgi/cat.png HTTP/1.1\r\nHOST: localhost\r\nlanguage:eng\r\nlanguage:eng\r\n\r\n";
-// 		std::vector<std::string> lines = getheadersLines(request);
-// 		parse_lines(lines);
-
-// 		std::map<std::string, std::string>map;
-// 		std::string str[] = {"Host:", "localhost"};
-// 		if (!two_string_case(str, map))
-// 			return 1;
-// 	}
-// 	catch (const std::exception& e)
-// 	{
-// 		std::cerr << e.what() << '\n';
-// 	}
-// }
+int main(void){
+	try
+	{
+		std::string request = "GET / HTTP/1.0\r\nheywhate:ver\r\n\r\n";
+		std::vector<std::string> lines = getheadersLines(request);
+		for (size_t i = 0; i < lines.size(); i++)
+			std::cout << "lines[" << i << "]: " << lines[i] << std::endl;
+		parse_lines(lines);
+	}
+	catch (const std::exception& e)
+	{
+		std::cerr << e.what() << '\n';
+	}
+}

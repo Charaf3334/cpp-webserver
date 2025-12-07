@@ -163,89 +163,273 @@ std::string Server::readRequest(int client_fd)
     return request;
 }
 
-std::vector<std::string> Server::splitRequest(std::string request_string)
+std::vector<std::string> Server::getheadersLines(const std::string req, bool &flag, int &error_status)
 {
-    std::vector<std::string> lines;
-    size_t start = 0;
-    size_t pos;
-
-    while ((pos = request_string.find("\r\n", start)) != std::string::npos) 
+    std::string sub_req;
+	std::vector<std::string> lines;
+	size_t pos = req.find("\r\n\r\n");
+	if (pos == std::string::npos)
     {
-        lines.push_back(request_string.substr(start, pos - start));
-        start = pos + 2;
+        flag = false;
+        error_status = 400;
+		return lines;
     }
-    if (start < request_string.size())
-        lines.push_back(request_string.substr(start));
-    return lines;
+	if (pos == 0)
+    {
+		flag = false;
+        error_status = 400;
+		return lines;
+    }
+	sub_req = req.substr(0, pos);
+	int start = 0;
+	for (size_t j = 0; j < sub_req.size(); j++)
+	{
+		if ((sub_req[j] == '\r' && sub_req[j + 1] == '\n') || j + 1 == sub_req.size())
+		{
+			lines.push_back(sub_req.substr(start, (j + 1 == sub_req.size()) ? j - start + 1 : j - start));
+			j++;
+			start = j + 1;
+		}
+		else if (!std::isprint(sub_req[j]))
+        {
+			flag = false;
+            error_status = 400;
+		    return lines;
+        }
+	}
+	if (lines.size() == 1)
+    {
+		flag = false;
+        error_status = 400;
+		return lines;
+    }
+	return lines;
 }
 
-bool Server::parseRequest(int client_fd, std::string request_string, Server::Request request) // this is the core function that processes the http requests our webserver receives
+bool Server::parse_path(std::string &path)
 {
-    (void)request;
-    std::vector<std::string> lines = splitRequest(request_string); // this function needs a solid logic to not pass when \r\n are not in appropriate places
-    for (size_t i = 0; i < lines.size(); i++)
+    if (path.empty() || path[0] != '/')
+		return false;
+	if (path.find("//") != std::string::npos)
+		return false;
+    for (size_t i = 0; i < path.length(); i++)
     {
-        std::string line = lines[i];
-        std::string *parts = split(line);
-        if (line.empty()) // process request body here if present ..
-        {
-            // std::cout << "ending of headers: " << std::endl;
+        if (!isalnum(path[i]) && path[i] != '/' && path[i] != '_' && path[i] != '-' && path[i] != '.')
+            return false;
+    }
+    return true;
+}
 
-        }
-        if (i == 0) // process starting line : METHOD URI HTTP-VERSION
+bool Server::parse_methode(std::string *words, int &error_status, Server::Request &request)
+{
+    std::string http_versions[] = {"HTTP/0.9", "HTTP/1.0", "HTTP/1.1", "HTTP/2.0", "HTTP/3.0"};
+	std::string http_methodes[] = {"GET", "POST", "DELETE", "PATCH", "PUT", "HEAD", "OPTIONS"};
+	for (int j = 0; j < 7; j++)
+    {
+		if (words[0] == http_methodes[j])
+			break;
+		if (j == 6)
         {
-            size_t count = countParts(line);
-            if (count != 3)
-            {
-                std::string response = buildResponse("", "", 400);
-                send(client_fd, response.c_str(), response.length(), 0);
-                delete[] parts;
-                return false;
-            }
-            for (size_t j = 0; j < count; j++)
-            {
-                if (j == 0)
-                {
-                    if (parts[j] != "GET" && parts[j] != "POST" && parts[j] != "DELETE" && parts[j] != "PUT" 
-                        && parts[j] != "PATCH" && parts[j] != "HEAD" && parts[j] != "OPTIONS")
-                    {
-                        std::string response = buildResponse("", "", 400);
-                        send(client_fd, response.c_str(), response.length(), 0);
-                        delete[] parts;
-                        return false;
-                    }
-                    request.method = parts[j]; // still need to check if this method is allowed in config file
-                } 
-                if (j == 1)
-                {
-                    if (!checkPath(parts[j]))
-                    {
-                        std::string response = buildResponse("", "", 400);
-                        send(client_fd, response.c_str(), response.length(), 0);
-                        delete[] parts;
-                        return false;
-                    }
-                    request.uri = parts[j];
-                }
-                if (j == 2)
-                {
-                    if (parts[j] != "HTTP/1.0" && parts[j] != "HTTP/1.1")
-                    {
-                        std::string response = buildResponse("", "", 505);
-                        send(client_fd, response.c_str(), response.length(), 0);
-                        delete[] parts;
-                        return false;
-                    }
-                    request.http_version = parts[j];
-                }
-            }
-        }
-        else // process headers: KEY: VALUE
+			error_status = 400;
+			return false;
+		}
+	}
+	if (words[0] != "GET" && words[0] != "POST" && words[0] != "DELETE")
+    {
+		error_status = 400;
+		return false;
+	}
+	if (!parse_path(words[1]))
+    {
+		error_status = 400;
+		return false;
+	}
+	for (int i = 0; i < 5; i++)
+    {
+		if (words[2] == http_versions[i])
+			break;
+		if (i == 4)
         {
-            // std::cout << "headers: " << line << std::endl;
+			error_status = 400;
+			return false;
+		}
+	}
+	if (words[2] != "HTTP/1.0" && words[2] != "HTTP/1.1")
+    {
+		error_status = 505;
+		return false;
+	}
+    request.method = words[0];
+    request.uri = words[1];
+    request.http_version = words[2];
+	return true;
+}
 
+std::string Server::str_tolower(std::string str)
+{
+    std::string result = str;
+	for (size_t i = 0; i < str.size(); i++)
+		result[i] = std::tolower((unsigned char)str[i]);
+	return result;
+}
+
+bool Server::check_allowedfirst(std::string &first)
+{
+    // std::string allowed_first = "!#$%&'*+-.^_`|~:";
+	for (size_t i = 0; i < first.size(); i++)
+	{
+		if (isalnum(first[i]) || first[i] == '-' || first[i] == ':')
+			continue ;
+		else
+			return false;
+		// for (int j = 0; j < allowed_first.size(); j++)
+		// {
+		// 	if (first[i] == allowed_first[j])
+		// 		break;
+		// 	if (j == allowed_first.size() - 1)
+		// 		return false;
+		// }
+	}
+	return true;
+}
+
+bool Server::one_string_case(std::string &str, Server::Request &request, int &error_status)
+{
+    if (str.empty())
+    {
+        error_status = 400;
+		return false;
+    }
+    
+	size_t pos = str.find(':');
+	if (pos == std::string::npos)
+    {
+        error_status = 400;
+		return false;
+    }
+	if (pos == str.size() - 1)
+    {
+        error_status = 400;
+		return false;
+    }
+	if (str[pos + 1] == ':')
+    {
+        error_status = 400;
+		return false;
+    }
+	std::string first = str.substr(0, pos + 1);
+	first = str_tolower(first);
+	if (first.size() == 1 || !check_allowedfirst(first))
+    {
+        error_status = 400;
+		return false;
+    }
+	std::string second = str.substr(pos + 1);
+	request.headers[first] = second;
+	return true;
+}
+
+bool Server::two_string_case(std::string *words, Server::Request &request, int &error_status)
+{
+    size_t size = words[0].size();
+	if (size == 1)
+    {
+		error_status = 400;
+		return false;
+	}
+	size_t pos = words[0].find(':');
+	if (pos == std::string::npos)
+    {
+		error_status = 400;
+		return false;
+	}
+	if (pos != size - 1)
+    {
+		error_status = 400;
+		return false;
+	}
+	if (!check_allowedfirst(words[0]))
+    {
+		error_status = 400;
+		return false;
+	}
+	words[0] = str_tolower(words[0]);
+	size_t tmp = words[1].find(':');
+	if (tmp != std::string::npos && tmp == 0)
+    {
+		error_status = 400;
+		return false;
+	}
+	request.headers[words[0]] = words[1];
+	return true;
+}
+
+bool Server::parse_lines(std::vector<std::string> lines, Server::Request &request, int &error_status)
+{
+    std::string *words;
+
+	for (size_t i = 0; i < lines.size(); i++)
+	{
+		size_t size = countParts(lines[i]);
+		words = split(lines[i]);
+		if (i == 0 && size != 3)
+        {
+            error_status = 400;
+			return false;
         }
-        delete[] parts;
+		else if (i == 0)
+        {
+			if (!parse_methode(words, error_status, request))
+            {
+                delete[] words;
+				return false;
+            }
+		}
+		if (i > 0 && (size != 2 && size != 1))
+        {
+            error_status = 400;
+			return false;
+        }
+		else if (i > 0)
+		{
+			if (size == 1)
+            {
+				if (!one_string_case(words[0], request, error_status))
+                {
+                    delete[] words;
+					return false;
+                }
+			}
+			else
+            {
+				if (!two_string_case(words, request, error_status))
+                {
+                    delete[] words;
+					return false;
+                }
+			}
+		}
+        delete[] words;
+	}
+	return true;
+}
+
+bool Server::parseRequest(int client_fd, std::string request_string, Server::Request &request) // this is the core function that processes the http requests our webserver receives
+{
+    bool flag = true;
+    int error_status = 0;
+    std::vector<std::string> lines = getheadersLines(request_string, flag, error_status);
+    if (!flag)
+    {
+        std::string response = buildResponse("", "", error_status);
+        send(client_fd, response.c_str(), response.length(), 0);
+        return false;
+    }
+    if (!parse_lines(lines, request, error_status))
+    {
+        std::string response = buildResponse("", "", error_status);
+        send(client_fd, response.c_str(), response.length(), 0);
+        return false;
     }
     return true;
 }
@@ -253,7 +437,6 @@ bool Server::parseRequest(int client_fd, std::string request_string, Server::Req
 void Server::initialize(void)
 {
     size_t countingFailedSockets = 0;
-    Server::Request request;
     int epoll_fd = epoll_create(MAX_EVENTS);
     if (epoll_fd == -1)
     {
@@ -340,9 +523,13 @@ void Server::initialize(void)
             {
                 std::string request_string = readRequest(fd);
                 std::cout << request_string << std::endl;
+                Server::Request request;
                 if (!parseRequest(fd, request_string, request))
+                {
+                    close(fd);
                     continue;
-                
+                }
+
                 // testing dynamic responses
                 int status = 0;
                 std::string path = "errors/error.html";

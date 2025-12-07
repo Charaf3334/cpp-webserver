@@ -24,11 +24,18 @@ class Server : public Webserv
         void closeSockets(void);
         static void handlingSigint(int sig);
         std::string readRequest(int client_fd);
-        std::vector<std::string> splitRequest(std::string request_string);
-        bool parseRequest(int client_fd, std::string request_string, Server::Request request);
+        bool parseRequest(int client_fd, std::string request_string, Server::Request &request);
         std::string readFile(const std::string file_path, int &status) const;
         std::string getExtension(std::string file_path);
         std::string buildResponse(std::string file_content, std::string extension, int status);
+        std::vector<std::string> getheadersLines(const std::string req, bool &flag, int &error_status);
+        bool parse_lines(std::vector<std::string> lines, Server::Request &request, int &error_status);
+        bool one_string_case(std::string &str, Server::Request &request, int &error_status);
+        bool two_string_case(std::string *words, Server::Request &request, int &error_status);
+        std::string str_tolower(std::string str);
+        bool check_allowedfirst(std::string &first);
+        bool parse_methode(std::string *words, int &error_status, Server::Request &request);
+        bool parse_path(std::string &path);
         std::string tostring(size_t num) const;
     public:
         Server(Webserv webserv);
