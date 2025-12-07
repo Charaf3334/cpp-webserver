@@ -325,7 +325,7 @@ bool Server::one_string_case(std::string &str, Server::Request &request, int &er
 		return false;
     }
 	std::string second = str.substr(pos + 1);
-	request.headers[first] = second;
+	request.headers[first.substr(0, pos)] = second;
 	return true;
 }
 
@@ -360,7 +360,7 @@ bool Server::two_string_case(std::string *words, Server::Request &request, int &
 		error_status = 400;
 		return false;
 	}
-	request.headers[words[0]] = words[1];
+	request.headers[words[0].substr(0, pos)] = words[1];
 	return true;
 }
 
