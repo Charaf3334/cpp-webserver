@@ -26,15 +26,9 @@ Server::~Server()
 
 bool Server::setNonBlockingFD(const int fd) const
 {
-    int current_fd_flags = fcntl(fd, F_GETFL, 0);
-    if (current_fd_flags == -1)
+    if (fcntl(fd, F_SETFL, O_NONBLOCK) == -1)
     {
-        std::cerr << "Error: getting current fd flags." << std::endl;
-        return false;
-    }
-    if (fcntl(fd, F_SETFL, current_fd_flags | O_NONBLOCK) == -1)
-    {
-        std::cerr << "Error: setting flags non-blocking mode." << std::endl;
+        std::cerr << "Error: setting fd to non-blocking mode." << std::endl;
         return false;
     }
     return true;
