@@ -30,8 +30,7 @@ class Server : public Webserv
         std::string buildResponse(std::string file_content, std::string extension, int status);
         std::vector<std::string> getheadersLines(const std::string req, bool &flag, int &error_status);
         bool parse_lines(std::vector<std::string> lines, Server::Request &request, int &error_status);
-        bool one_string_case(std::string &str, Server::Request &request, int &error_status);
-        bool two_string_case(std::string *words, Server::Request &request, int &error_status);
+        bool parse_headers(std::string &str, Server::Request &request, int &error_status);
         std::string str_tolower(std::string str);
         bool check_allowedfirst(std::string &first);
         bool parse_methode(std::string *words, int &error_status, Server::Request &request);

@@ -293,31 +293,30 @@ bool Server::check_allowedfirst(std::string &first)
 	return true;
 }
 
-bool Server::one_string_case(std::string &str, Server::Request &request, int &error_status)
+bool Server::parse_headers(std::string &line, Server::Request &request, int &error_status)
 {
-    if (str.empty())
+    if (line.empty())
     {
         error_status = 400;
 		return false;
     }
-    
-	size_t pos = str.find(':');
+	size_t pos = line.find(':');
 	if (pos == std::string::npos)
     {
         error_status = 400;
 		return false;
     }
-	if (pos == str.size() - 1)
+	if (pos == line.size() - 1)
     {
         error_status = 400;
 		return false;
     }
-	if (str[pos + 1] == ':')
+	if (line[pos + 1] == ':')
     {
         error_status = 400;
 		return false;
     }
-	std::string first = str.substr(0, pos + 1);
+	std::string first = line.substr(0, pos + 1);
 	first = str_tolower(first);
 	if (first.size() == 1 || !check_allowedfirst(first))
     {
@@ -325,64 +324,28 @@ bool Server::one_string_case(std::string &str, Server::Request &request, int &er
 		return false;
     }
     first = first.substr(0, pos);
-	std::string second = str.substr(pos + 1);
+    pos++;
+    while (line[pos] && line[pos] == ' ')
+        pos++;
+    if (line[pos] == ':')
+    {
+        error_status = 400;
+        return false;
+    }
+    std::string second = line.substr(pos);
     if (request.http_version == "HTTP/1.1")
     {
-        std::map<std::string, std::string>::iterator found = request.headers.find(first);
-        if (found != request.headers.end() && (first == "host" || first == "content-length" || first == "transfer-encoding"))
-        {
-            error_status = 400;
-            return false;
-        }
+            std::map<std::string, std::string>::iterator found = request.headers.find(first);
+            if (found != request.headers.end() && (first == "host" || first == "content-length" || first == "transfer-encoding"))
+            {
+                    error_status = 400;
+                    return false;
+            }
     }
-	request.headers[first] = second;
+    request.headers[first] = second;
 	return true;
 }
 
-bool Server::two_string_case(std::string *words, Server::Request &request, int &error_status)
-{
-    size_t size = words[0].size();
-	if (size == 1)
-    {
-		error_status = 400;
-		return false;
-	}
-	size_t pos = words[0].find(':');
-	if (pos == std::string::npos)
-    {
-		error_status = 400;
-		return false;
-	}
-	if (pos != size - 1)
-    {
-		error_status = 400;
-		return false;
-	}
-	if (!check_allowedfirst(words[0]))
-    {
-		error_status = 400;
-		return false;
-	}
-	words[0] = str_tolower(words[0]);
-	size_t tmp = words[1].find(':');
-	if (tmp != std::string::npos && tmp == 0)
-    {
-		error_status = 400;
-		return false;
-	}
-    std::string key = words[0].substr(0, pos);
-    if (request.http_version == "HTTP/1.1")
-    {
-        std::map<std::string, std::string>::iterator found = request.headers.find(key);
-        if (found != request.headers.end() && (key == "host" || key == "content-length" || key == "transfer-encoding"))
-        {
-            error_status = 400;
-            return false;
-        }
-    }
-	request.headers[key] = words[1];
-	return true;
-}
 
 bool Server::parse_lines(std::vector<std::string> lines, Server::Request &request, int &error_status)
 {
@@ -390,46 +353,31 @@ bool Server::parse_lines(std::vector<std::string> lines, Server::Request &reques
 
 	for (size_t i = 0; i < lines.size(); i++)
 	{
-		size_t size = countParts(lines[i]);
-		words = split(lines[i]);
-		if (i == 0 && size != 3)
+        if (i == 0)
         {
-            error_status = 400;
-			return false;
-        }
-		else if (i == 0)
-        {
-			if (!parse_methode(words, error_status, request))
+            size_t size = countParts(lines[i]);
+            words = split(lines[i]);
+            if (size != 3)
             {
+                error_status = 400;
                 delete[] words;
-				return false;
+                return false;
             }
-		}
-		if (i > 0 && (size != 2 && size != 1))
-        {
-            error_status = 400;
-			return false;
+            else
+            {
+                if (!parse_methode(words, error_status, request))
+                {
+                    delete[] words;
+                    return false;
+                }
+            }
+            delete[] words;
         }
 		else if (i > 0)
 		{
-			if (size == 1)
-            {
-				if (!one_string_case(words[0], request, error_status))
-                {
-                    delete[] words;
-					return false;
-                }
-			}
-			else
-            {
-				if (!two_string_case(words, request, error_status))
-                {
-                    delete[] words;
-					return false;
-                }
-			}
+            if (!parse_headers(lines[i], request, error_status))
+				return false;
 		}
-        delete[] words;
 	}
     if (request.http_version == "HTTP/1.1")
     {
