@@ -39,13 +39,12 @@ class Webserv
             std::string upload_dir;
             std::map<std::string, std::string> cgi_file; // .py -> file
             bool hasCgi;
-            std::map<std::string, std::string> error_pages; // each location error pages
+            std::map<size_t, std::string> error_pages; // each location error pages
         };
         struct Server
         {
             std::string ip_address;
             int port;
-            std::string name;
             std::vector<Location> locations; 
             std::string root;
         };
@@ -54,7 +53,7 @@ class Webserv
         std::vector<std::string> tokens;
         std::vector<Webserv::Server> servers;
         std::map<std::string, std::string> error_pages; // global ones
-        size_t client_max_body_size;
+        size_t client_max_body_size; // values are in bytes
         std::stack<std::string> brackets;
         std::string http_root;
         std::map<int, std::string> status_codes;
@@ -71,8 +70,7 @@ class Webserv
         bool checkValidListen(const std::string s, bool &isHost) const;
         bool isValidIp(const std::string ip) const;
         bool checkHost(const std::string host, bool &isHost) const;
-        std::string convertHostToIp(const std::string host, const std::string message); 
-        // bool checkServerName(const std::string s) const;
+        std::string convertHostToIp(const std::string host, const std::string message);
         void serverDefaultInit(Webserv::Server &server);
         void locationDefaultInit(Location &location);
         bool checkPath(const std::string path) const;
@@ -85,7 +83,6 @@ class Webserv
         bool checkStatusCode(const std::string code) const;
         bool checkUrlText(size_t i, Location &location, bool code_present, int status_code);
         bool isstrdigit(std::string str) const;
-        unsigned long stringToUnsignedLong(const std::string str) const;
         bool isValidStatusCode(const std::string code);
         std::vector<std::string> semicolonBracketsFix(const std::vector<std::string> input);
         void assignStatusCodes(void);

@@ -111,7 +111,6 @@ std::string* Webserv::split(const std::string line)
             i++;
         if (i >= size)
             break;
-
         size_t j = i;
         while (j < size)
         {
@@ -135,7 +134,6 @@ std::vector<std::string> Webserv::semicolonBracketsFix(const std::vector<std::st
     {
         const std::string s = *it;
         std::string temp;
-
         for (std::string::size_type i = 0; i < s.size(); ++i) 
         {
             char c = s[i];
@@ -155,19 +153,6 @@ std::vector<std::string> Webserv::semicolonBracketsFix(const std::vector<std::st
         if (!temp.empty())
             result.push_back(temp);
     }
-    return result;
-}
-
-unsigned long Webserv::stringToUnsignedLong(const std::string str) const
-{
-    for (size_t i = 0; i < str.length(); i++)
-        if (!std::isdigit(str[i]))
-            throw std::runtime_error("Error: '" + str + "' is not a valid status number");
-    std::istringstream is(str);
-    unsigned long result;
-    is >> result;
-    if (is.fail())
-        throw std::runtime_error("Error: '" + str + "' is too large for unsigned long");
     return result;
 }
 
@@ -329,13 +314,10 @@ bool Webserv::isCodeInMap(int code)
 
 bool Webserv::isValidStatusCode(const std::string code)
 {
-    try
+    for (size_t i = 0; i < code.length(); i++)
     {
-        stringToUnsignedLong(code);
-    }
-    catch (const std::exception &e)
-    {
-        return false;
+        if (!isdigit(code[i]))
+            return false;
     }
     return true;
 }
@@ -377,18 +359,16 @@ void Webserv::read_file(void)
                     i++;
                     if (tokens[i] == ";")
                         throw std::runtime_error("Error: No error pages provided.");
-
                     std::vector<std::string> error_codes;
                     std::string error_path;
-
                     while (i < tokens.size() && tokens[i] != ";" && tokens[i] != "}" && tokens[i] != "server")
                     {
                         if (isValidStatusCode(tokens[i]))
                         {
-                            unsigned long num = stringToUnsignedLong(tokens[i]);
-                            if (num < 400 || num > 599)
+                            size_t code = atoll(tokens[i].c_str());
+                            if (code < 400 || code > 599)
                                 throw std::runtime_error("Error: Status code " + tokens[i] + " must be between 400 and 599");
-                            if (!isCodeInMap(num))
+                            if (!isCodeInMap(code))
                                 throw std::runtime_error("Error: Not a valid http status code.");
                             error_codes.push_back(tokens[i]);
                             i++;
@@ -564,7 +544,7 @@ void Webserv::mergePaths(void)
                 else if (error_page_path[0] == '/')
                     error_page_path = error_page_path.substr(1);
                 std::string full_path = rooot + path + error_page_path;
-                servers[i].locations[j].error_pages[it->first] = full_path;
+                servers[i].locations[j].error_pages[atoll(it->first.c_str())] = full_path;
             }
         }
     }
@@ -661,7 +641,6 @@ bool Webserv::checkHost(const std::string host, bool &isHost) const
     if (host.empty() || host.length() > 253)
         return false;
     int labelLength = 0;
-
     for (size_t i = 0; i < host.length(); i++)
     {
         char c = host[i];
@@ -717,17 +696,6 @@ bool Webserv::checkValidListen(const std::string s, bool &isHost) const
         return false;
     return true;
 }
-
-// bool Webserv::checkServerName(const std::string s) const
-// {
-//     size_t len = s.length();
-
-//     if (!len)
-//         return false;
-//     if (s != "localhost")
-//         return false;
-//     return true;
-// }
 
 bool Webserv::checkStatusCode(const std::string code) const
 {
@@ -810,7 +778,6 @@ bool Webserv::checkUrlText(size_t i, Location &location, bool code_present, int 
 
 void Webserv::serverDefaultInit(Webserv::Server &server)
 {
-    server.name = "";
     server.port = -1;
     server.root = "";
 }
@@ -851,22 +818,11 @@ bool Webserv::checkRoot(const std::string path) const // if path is like ../what
     return true;
 }
 
-// void Webserv::saveExtensionPath(const std::string extension, const std::string path, Location &location)
-// {
-//     if ((extension == ".py" && path != "/usr/bin/python3") || (extension == ".php" && path != "/usr/bin/php"))
-//         throw std::runtime_error("Error: Invalid path for " + extension + ".");
-//     std::map<std::string, std::string>::iterator found = location.cgi_extension.find(extension);
-//     if (found != location.cgi_extension.end())
-//         throw std::runtime_error("Error: Duplicate in " + extension);
-//     location.cgi_extension[extension] = path;
-// }
-
 Webserv::Server Webserv::parseServer(size_t &i)
 {
     Server server;
     serverDefaultInit(server);
     bool sawListen = false;
-    // bool sawServerName = false;
     bool sawLocation = false;
     int depth = 1;
     bool isHost = false;
@@ -899,28 +855,6 @@ Webserv::Server Webserv::parseServer(size_t &i)
             if (!sawListen)
                 throw std::runtime_error("Error: Expected listen directive at top of server block.");
         }
-        // if (tokens[i] == "server_name")
-        // {
-        //     if (depth != 1)
-        //         throw std::runtime_error("Error: Server_name is not inside server block.");
-        //     if (sawServerName)
-        //         throw std::runtime_error("Error: Duplicate server_name directive.");
-        //     sawServerName = true;
-        //     i++;
-        //     if (tokens[i + 1] != ";")
-        //         throw std::runtime_error("Error: Expected ';' after server name.");
-        //     std::string s = tokens[i];
-        //     if (!checkServerName(s))
-        //         throw std::runtime_error("Error: Server_name should be localhost.");
-        //     server.name = s;
-        //     i++;
-        //     continue;
-        // }
-        // else
-        // {
-        //     if (!sawServerName)
-        //         throw std::runtime_error("Error: Expected server_name directive in server block.");
-        // }
         if (tokens[i] == "root") // zakaria root in server
         {
             if (depth != 1)
@@ -933,7 +867,7 @@ Webserv::Server Webserv::parseServer(size_t &i)
                 throw std::runtime_error("Error: Expected a path after root directive.");
             if (tokens[i + 1] != ";")
                 throw std::runtime_error("Error: Expected ';' after root.");
-            if (!checkRoot(tokens[i])) // khsni mzl nchecki wach dak path 3ndi, hada ghy check syntax
+            if (!checkRoot(tokens[i]))
                 throw std::runtime_error("Error: Invalid path for root directive.");
             server.root = tokens[i];
             i++;
@@ -983,9 +917,6 @@ void Webserv::parseLocation(size_t &i, Webserv::Server &server, int &depth, bool
         throw std::runtime_error("Error: Expected '{' after path.");
     depth++;
     i++;
-    // if (tokens[i] == "}" || tokens[i] == ";")
-    //     throw std::runtime_error("Error: Location block cannot be empty.");
-
     for (; i < tokens.size() && tokens[i] != "}"; i++)
     {
         if (tokens[i] == "root")
@@ -1121,7 +1052,7 @@ void Webserv::parseLocation(size_t &i, Webserv::Server &server, int &depth, bool
     }
     if (server.root.empty() && !sawRoot && !sawRedirection && http_root.empty())
         throw std::runtime_error("Error: Missing root.");
-    else if (!server.root.empty() && !sawRoot) // zakaria if root is not in location but exists in server block overridih
+    else if (!server.root.empty() && !sawRoot)
         location.root = server.root;
     else if (server.root.empty() && !sawRoot && !http_root.empty())
         location.root = http_root;
