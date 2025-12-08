@@ -61,18 +61,12 @@ void Server::handlingSigint(int sig)
     }
 }
 
-std::string Server::readFile(const std::string file_path, int &status) const
+std::string Server::readFile(const std::string file_path) const
 {
     std::ifstream file(file_path.c_str());
     std::stringstream content;
-    if (!file.is_open())
-    {
-        status = 404;
-        return "";
-    }
 
     content << file.rdbuf();
-    status = 200;
     file.close();
     return content.str();
 }
@@ -420,6 +414,136 @@ bool Server::parseRequest(int client_fd, std::string request_string, Server::Req
     return true;
 }
 
+bool Server::isUriExists(std::string uri, Webserv::Server server) const
+{
+    for (size_t i = 0; i < server.locations.size(); i++)
+    {
+        if (server.locations[i].path == uri)
+            return true;
+    }
+    return false;
+}
+
+Webserv::Location Server::getLocation(std::string uri, Webserv::Server server)
+{
+    Webserv::Location location;
+    for (size_t i = 0; i < server.locations.size(); i++)
+    {
+        if (server.locations[i].path == uri)
+        {
+            location = server.locations[i];
+            break;
+        }
+    }
+    return location;
+}
+
+bool Server::atleastOneFileExists(Webserv::Location location) const
+{
+    size_t counter = 0;
+    struct stat st;
+
+    for (size_t i = 0; i < location.index.size(); i++)
+    {
+        if (stat(location.index[i].c_str(), &st) == -1)
+            counter++;
+    }
+    return !(counter == location.index.size());
+}
+
+std::string Server::getFilethatExists(Webserv::Location location) const
+{
+    struct stat st;
+
+    for (size_t i = 0; i < location.index.size(); i++)
+    {
+        if (stat(location.index[i].c_str(), &st) != -1)
+            return location.index[i];
+    }
+    return "";
+}
+
+bool Server::isMethodAllowed(std::string method, Webserv::Location location) const
+{
+    for (size_t i = 0; i < location.methods.size(); i++)
+    {
+        if (location.methods[i] == method)
+            return true;
+    }
+    return false;
+}
+
+bool Server::serveClient(int client_fd, Server::Request request)
+{
+    Webserv::Server server;
+    if (request.method == "GET")
+    {
+        server = *clientfd_to_server[client_fd];
+        struct stat st;
+
+        if (!isUriExists(request.uri, server))
+        {
+            std::string response = buildResponse("", "", 404);
+            send(client_fd, response.c_str(), response.length(), 0);
+            return false;            
+        }
+        else
+        {
+            Webserv::Location location = getLocation(request.uri, server);
+            if (!isMethodAllowed("GET", location))
+            {
+                std::string response = buildResponse("", "", 405);
+                send(client_fd, response.c_str(), response.length(), 0);
+                return false;
+            }
+            std::string toSearch = location.root + request.uri;
+            if (stat(toSearch.c_str(), &st) == -1)
+            {
+                std::string response = buildResponse("", "", 404);
+                send(client_fd, response.c_str(), response.length(), 0);
+                return false;
+            }
+            else
+            {
+                if (S_ISDIR(st.st_mode))
+                {
+                    if (!atleastOneFileExists(location))
+                    {
+                        std::string response = buildResponse("", "", 404);
+                        send(client_fd, response.c_str(), response.length(), 0);
+                        return false;
+                    }
+                    else
+                    {
+                        std::string index_file = getFilethatExists(location);
+                        if (access(index_file.c_str(), R_OK) == 0)
+                        {
+                            std::string response = buildResponse(readFile(index_file), getExtension(index_file), 200);
+                            send(client_fd, response.c_str(), response.length(), 0);
+                            return true;
+                        }
+                        else
+                        {
+                            std::string response = buildResponse("", "", 403);
+                            send(client_fd, response.c_str(), response.length(), 0);
+                            return false;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    else if (request.method == "DELETE")
+    {
+
+    }
+    else if (request.method == "POST")
+    {
+
+    }
+    return true;
+}
+
 void Server::initialize(void)
 {
     size_t countingFailedSockets = 0;
@@ -472,6 +596,7 @@ void Server::initialize(void)
             continue;
         }
         this->socket_fds.push_back(sock_fd);
+        this->sockfd_to_server[sock_fd] = &servers[i];
         std::cout << "Server " << i + 1 << " listening on: " << servers[i].ip_address << ":" << servers[i].port << std::endl;
     }
     epoll_event events[MAX_EVENTS];
@@ -499,6 +624,7 @@ void Server::initialize(void)
                 {
                     std::cout << "New client connected ..." << std::endl;
                     setNonBlockingFD(client_fd);
+                    this->clientfd_to_server[client_fd] = this->sockfd_to_server[fd];
                     epoll_event ev;
                     ev.events = EPOLLIN;
                     ev.data.fd = client_fd;
@@ -512,23 +638,19 @@ void Server::initialize(void)
                 { 
                     close(fd);
                     continue;
-                }   
-                std::cout << request_string << std::endl;
+                }
+                // std::cout << request_string << std::endl;
                 Server::Request request;
                 if (!parseRequest(fd, request_string, request))
                 {
                     close(fd);
                     continue;
                 }
-
-                // testing dynamic responses
-                int status = 0;
-                std::string path = "errors/error.html";
-                std::string extension = getExtension(path);
-                std::string file_content = readFile(path, status); // check for error to return http error code
-                std::string response = buildResponse(file_content, extension, status);
-                send(fd, response.c_str(), response.length(), 0);
-                close(fd);
+                if (!serveClient(fd, request))
+                {
+                    close(fd);
+                    continue;
+                }
             }
         }
     }

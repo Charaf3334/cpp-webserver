@@ -483,6 +483,7 @@ void Webserv::read_file(void)
     if (checkDuplicatePaths())
         throw std::runtime_error("Error: Server has the same location path multiple times.");
     mergePaths();
+    
     // std::cout << "ERROR PAGES\n";
     // for (std::map<std::string, std::string>::iterator it = error_pages.begin(); it != error_pages.end(); it++)
     //     std::cout << "Error_page: " << it->first << " -> " << it->second << std::endl;

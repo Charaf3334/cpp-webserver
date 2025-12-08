@@ -21,7 +21,7 @@
 #include <netinet/in.h>
 #include <unistd.h>
 #include <signal.h>
-
+#include <sys/stat.h>
 
 class Webserv 
 {
