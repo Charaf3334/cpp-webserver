@@ -426,9 +426,9 @@ void Webserv::read_file(void)
                     i++;
                     if (tokens[i] != ";")
                         throw std::runtime_error("Error: Expected ';' after client_max_body_size.");
-                    if (!checkMaxBodySize(body_size_value))
+                    if (!checkMaxBodySize(body_size_value) || atoll(body_size_value.c_str()) <= 0)
                         throw std::runtime_error("Error: Invalid value for client_max_body_size.");
-                    client_max_body_size = body_size_value;
+                    client_max_body_size = atoll(body_size_value.c_str());
                     i++;
                     has_body_size = true;
                 }
@@ -451,8 +451,8 @@ void Webserv::read_file(void)
                 else
                     throw std::runtime_error("Error: Unexpected token in http block: " + tokens[i]);
             }
-            if (client_max_body_size.empty()) // zakaria default body size
-                client_max_body_size = "1M";
+            if (!has_body_size)
+                client_max_body_size = 1024;
             while (i < tokens.size() && tokens[i] != "}")
             {
                 if (tokens[i] == "server")
@@ -488,7 +488,7 @@ void Webserv::read_file(void)
     // for (std::map<std::string, std::string>::iterator it = error_pages.begin(); it != error_pages.end(); it++)
     //     std::cout << "Error_page: " << it->first << " -> " << it->second << std::endl;
     
-    // std::cout << "MAX_CLIENT_BODY_SIZE: " << (client_max_body_size.empty() ? "Empty" : client_max_body_size) << std::endl;
+    // std::cout << "MAX_CLIENT_BODY_SIZE: " << client_max_body_size << std::endl;
     // for (size_t i = 0; i < servers.size(); i++)
     // {
     //     std::cout << "\nSERVER[" << i << "]\n";
@@ -573,14 +573,6 @@ void Webserv::mergePaths(void)
 bool Webserv::checkMaxBodySize(const std::string value)
 {
     if (value.empty())
-        return false;
-    if (value[0] == 'M')
-        return false;
-    size_t idx = value.find('M');
-    if (idx == std::string::npos || idx != value.size() - 1)
-        return false;
-    int count = std::count(value.begin(), value.end(), 'M');
-    if (count != 1)
         return false;
     for (size_t i = 0; i < value.size() - 1; i++)
     {

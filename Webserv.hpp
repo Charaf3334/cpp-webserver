@@ -54,7 +54,7 @@ class Webserv
         std::vector<std::string> tokens;
         std::vector<Webserv::Server> servers;
         std::map<std::string, std::string> error_pages; // global ones
-        std::string client_max_body_size;
+        size_t client_max_body_size;
         std::stack<std::string> brackets;
         std::string http_root;
         std::map<int, std::string> status_codes;
