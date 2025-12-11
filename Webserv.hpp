@@ -1,6 +1,8 @@
 #ifndef WEBSERV_HPP
 #define WEBSERV_HPP
 
+
+#include <dirent.h>
 #include <iostream>
 #include <string>
 #include <fstream>

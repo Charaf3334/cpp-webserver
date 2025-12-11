@@ -29,7 +29,7 @@ class Server : public Webserv
         bool parseRequest(int client_fd, std::string request_string, Server::Request &request);
         std::string readFile(const std::string file_path) const;
         std::string getExtension(std::string file_path);
-        std::string buildResponse(std::string file_content, std::string extension, int status);
+        std::string buildResponse(std::string file_content, std::string extension, int status, std::string body);
         std::vector<std::string> getheadersLines(const std::string req, bool &flag, int &error_status);
         bool parse_lines(std::vector<std::string> lines, Server::Request &request, int &error_status);
         bool parse_headers(std::string &str, Server::Request &request, int &error_status);
