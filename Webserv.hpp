@@ -90,6 +90,7 @@ class Webserv
         void assignStatusCodes(void);
         bool isCodeInMap(int code);
         void assignContentType(void);
+        void print_conf(void);
     public:
         Webserv();
         Webserv(const std::string config_file_path);

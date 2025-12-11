@@ -322,6 +322,45 @@ bool Webserv::isValidStatusCode(const std::string code)
     return true;
 }
 
+void Webserv::print_conf(void) {
+        std::cout << "ERROR PAGES\n";
+    for (std::map<std::string, std::string>::iterator it = error_pages.begin(); it != error_pages.end(); it++)
+        std::cout << "Error_page: " << it->first << " -> " << it->second << std::endl;
+    
+    std::cout << "MAX_CLIENT_BODY_SIZE: " << client_max_body_size << std::endl;
+    for (size_t i = 0; i < servers.size(); i++)
+    {
+        std::cout << "\nSERVER[" << i << "]\n";
+        std::cout << "Listen: " << servers[i].ip_address <<  ":" << servers[i].port << std::endl;
+        std::cout << "Server Root: " << servers[i].root << std::endl;
+        for (size_t j = 0; j < servers[i].locations.size(); j++)
+        {
+            std::cout << "  \nLOCATION[" << j << "]\n";
+            std::cout << "    Path: " << j << " " << servers[i].locations[j].path << std::endl;
+            std::cout << "    Root: " << j << " " << servers[i].locations[j].root << std::endl;
+            for (size_t k = 0; k < servers[i].locations[j].index.size(); k++)
+            {
+                std::cout << "    Index: " << j << " " << servers[i].locations[j].index[k] << std::endl;
+            }
+            for (size_t k = 0; k < servers[i].locations[j].methods.size(); k++)
+            {
+                std::cout << "    Methods: " << j << " " << servers[i].locations[j].methods[k] << std::endl;
+            }
+            std::cout << "    Autoindex: " << j << " " << (servers[i].locations[j].autoindex ? "True" : "False") << std::endl;
+            std::cout << "    Redirection: " << j << " " << (servers[i].locations[j].isRedirection ? "True" : "False") << std::endl;
+            if (servers[i].locations[j].isRedirection)
+            {
+                std::map<int, std::string>::iterator it = servers[i].locations[j].redirection.begin();
+                std::cout << "    is Text: " << (servers[i].locations[j].redirectionIsText ? "True" : "False") << std::endl;
+                std::cout << "    Code & URL/TEXT: " << it->first << " -> " << "|" << it->second << "|" << std::endl;
+            }
+            std::cout << "    Upload: " << servers[i].locations[j].upload_dir << std::endl;
+            std::cout << "    Cgi: " << (servers[i].locations[j].hasCgi ? "on" : "off") << std::endl;
+        }
+        std::cout << "-------------------------------------------------" << std::endl;
+    }
+}
+
 void Webserv::read_file(void)
 {
     this->config_file.clear();
@@ -464,50 +503,7 @@ void Webserv::read_file(void)
         throw std::runtime_error("Error: Server has the same location path multiple times.");
     mergePaths();
     
-    // std::cout << "ERROR PAGES\n";
-    // for (std::map<std::string, std::string>::iterator it = error_pages.begin(); it != error_pages.end(); it++)
-    //     std::cout << "Error_page: " << it->first << " -> " << it->second << std::endl;
-    
-    // std::cout << "MAX_CLIENT_BODY_SIZE: " << client_max_body_size << std::endl;
-    // for (size_t i = 0; i < servers.size(); i++)
-    // {
-    //     std::cout << "\nSERVER[" << i << "]\n";
-    //     std::cout << "Listen: " << servers[i].ip_address <<  ":" << servers[i].port << std::endl;
-    //     std::cout << "Server Root: " << servers[i].root << std::endl;
-    //     for (size_t j = 0; j < servers[i].locations.size(); j++)
-    //     {
-    //         std::cout << "  \nLOCATION[" << j << "]\n";
-    //         std::cout << "    Path: " << j << " " << servers[i].locations[j].path << std::endl;
-    //         std::cout << "    Root: " << j << " " << servers[i].locations[j].root << std::endl;
-    //         for (size_t k = 0; k < servers[i].locations[j].index.size(); k++)
-    //         {
-    //             std::cout << "    Index: " << j << " " << servers[i].locations[j].index[k] << std::endl;
-    //         }
-    //         for (size_t k = 0; k < servers[i].locations[j].methods.size(); k++)
-    //         {
-    //             std::cout << "    Methods: " << j << " " << servers[i].locations[j].methods[k] << std::endl;
-    //         }
-    //         std::cout << "    Autoindex: " << j << " " << (servers[i].locations[j].autoindex ? "True" : "False") << std::endl;
-    //         std::cout << "    Redirection: " << j << " " << (servers[i].locations[j].isRedirection ? "True" : "False") << std::endl;
-    //         if (servers[i].locations[j].isRedirection)
-    //         {
-    //             std::map<int, std::string>::iterator it = servers[i].locations[j].redirection.begin();
-    //             std::cout << "    is Text: " << (servers[i].locations[j].redirectionIsText ? "True" : "False") << std::endl;
-    //             std::cout << "    Code & URL/TEXT: " << it->first << " -> " << "|" << it->second << "|" << std::endl;
-    //         }
-    //         std::cout << "    Upload: " << servers[i].locations[j].upload_dir << std::endl;
-    //         if (servers[i].locations[j].hasCgi)
-    //         {
-    //             std::map<std::string, std::string>::iterator it = servers[i].locations[j].cgi_file.begin();
-    //             for (; it != servers[i].locations[j].cgi_file.end(); it++)
-    //             {
-    //                 std::cout << "    extension: " << it->first << std::endl;
-    //                 std::cout << "    Path: " << it->second << std::endl;
-    //             }
-    //         }
-    //     }
-    //     std::cout << "-------------------------------------------------" << std::endl;
-    // }
+    // print_conf();
 }
 
 void Webserv::mergePaths(void)
@@ -528,12 +524,6 @@ void Webserv::mergePaths(void)
             {
                 std::string index = rooot + path + servers[i].locations[j].index[k];
                 servers[i].locations[j].index[k] = index;
-            }
-            if (servers[i].locations[j].hasCgi)
-            {
-                std::map<std::string, std::string>::iterator it = servers[i].locations[j].cgi_file.begin();
-                std::string cgi_path = rooot + path + it->second;
-                servers[i].locations[j].cgi_file[it->first] = cgi_path;
             }
             std::map<std::string, std::string>::iterator it = error_pages.begin();
             for (; it != error_pages.end(); it++)
@@ -1035,17 +1025,16 @@ void Webserv::parseLocation(size_t &i, Webserv::Server &server, int &depth, bool
                 throw std::runtime_error("Error: Duplicate cgi directive.");
             sawCgi = true;
             i++;
-            location.hasCgi = true;
             if (tokens[i] == ";")
                 throw std::runtime_error("Error: Empty cgi field.");
-            if (!checkFileExtension(tokens[i], ".py") && !checkFileExtension(tokens[i], ".php"))
-                throw std::runtime_error("Error: Unknown extension for cgi.");
-            std::string file = tokens[i];
+            
+            if (tokens[i] == "on")
+                location.hasCgi = true;
+            else if (tokens[i] != "off")
+                throw std::runtime_error("Error: Invalid value for cgi directive. Expected 'on' or 'off'.");
             i++;
             if (tokens[i] != ";")
                 throw std::runtime_error("Error: Expected ';' after cgi file.");
-            size_t pos = file.find('.');
-            location.cgi_file[file.substr(pos)] = file;
         }
         else if (tokens[i] != "root" && tokens[i] != "index" && tokens[i] != "allow_methods" && tokens[i] != "autoindex" && tokens[i] != ";")
             throw std::runtime_error("Error: Invalid directive '" + tokens[i] + "' inside location block.");
