@@ -21,29 +21,6 @@ to do:
     - content-type will be stored as std::map (extension, content-type) ❌
     - status codes and their messages will be stored as std::map (code, message) ❌
 
-    zakaria:
-    - fixit order dyal error_page and body size
-    - fixit multiple error_page key word
-    - rje3t error_pageS map, mab9atch vector {"code", "path"}
-    - error_page machi pageS
-    - root key word momkin tkon b7al haka 
-        server {
-            listen 8080;
-            server_name localhost;
-            root /home/zguellou/Documents/nginx_test;
-        }
-    - if root exists on server block and not in location, location.root = server.root, if root doesn't exist neither on server or location error. Index in location by default is "index.html"
-        server {
-            listen 8080;
-            server_name localhost;
-            root /home/zguellou/Documents/cpp-webserver/public;
-
-            location / {
-                root /home/zguellou/Documents/nginx_test; if root kayn west location kayovewrite root lli fserver block
-                index test.html index.html;
-            }
-        }
-    - checked status wach valid
 
 
 
@@ -93,3 +70,4 @@ to do:
     HTTP/1.1 KEEPS CONNECTION ALIVE
     HTTP/1.0 CONNECTION CLOSE
 
+    - serviw error pages

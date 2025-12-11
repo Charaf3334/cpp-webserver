@@ -91,6 +91,8 @@ class Webserv
         bool isCodeInMap(int code);
         void assignContentType(void);
         void print_conf(void);
+        void sortLocationPaths(Webserv::Server &server);
+        static bool locationCmp(const Webserv::Location &l1, const Webserv::Location &l2);
     public:
         Webserv();
         Webserv(const std::string config_file_path);

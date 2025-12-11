@@ -87,7 +87,7 @@ std::string Server::tostring(size_t num) const
     return strnum.str();
 }
 
-std::string Server::buildResponse(std::string file_content, std::string extension, int status, std::string body)
+std::string Server::buildResponse(std::string file_content, std::string extension, int status)
 {
     std::string CRLF = "\r\n";
     std::string start_line = "HTTP/1.1 " + tostring(status) + " " + status_codes[status] + CRLF;
@@ -100,7 +100,7 @@ std::string Server::buildResponse(std::string file_content, std::string extensio
     std::string content_type = "Content-Type: " + type + CRLF;
     std::string content_length = "Content-Length: " + tostring(file_content.length()) + CRLF;
     std::string connection = "Connection: close" + CRLF + CRLF; // two CRLF mean ending the headers , still need to check what does this mean and when to make it keep-alive vs close
-    std::string response = start_line + content_type + content_length + connection + file_content + body;
+    std::string response = start_line + content_type + content_length + connection + file_content;
     return response;
 }
 
@@ -403,13 +403,13 @@ bool Server::parseRequest(int client_fd, std::string request_string, Server::Req
     std::vector<std::string> lines = getheadersLines(request_string, flag, error_status);
     if (!flag)
     {
-        std::string response = buildResponse("", "", error_status, "");
+        std::string response = buildResponse("", "", error_status);
         send(client_fd, response.c_str(), response.length(), 0);
         return false;
     }
     if (!parse_lines(lines, request, error_status))
     {
-        std::string response = buildResponse("", "", error_status, "");
+        std::string response = buildResponse("", "", error_status);
         send(client_fd, response.c_str(), response.length(), 0);
         return false;
     }
@@ -418,6 +418,11 @@ bool Server::parseRequest(int client_fd, std::string request_string, Server::Req
 
 bool Server::isUriExists(std::string uri, Webserv::Server server) const
 {
+    for (size_t i = 0; i < server.locations.size(); i++)
+    {
+        if (server.locations[i].path == uri)
+            return true;
+    }
     for (size_t i = 0; i < server.locations.size(); i++)
     {
         if (uri.compare(0, server.locations[i].path.length(), server.locations[i].path) == 0)
@@ -429,6 +434,12 @@ bool Server::isUriExists(std::string uri, Webserv::Server server) const
 Webserv::Location Server::getLocation(std::string uri, Webserv::Server server)
 {
     Webserv::Location location;
+
+    for (size_t i = 0; i < server.locations.size(); i++)
+    {
+        if (server.locations[i].path == uri)
+            return server.locations[i];
+    }
     for (size_t i = 0; i < server.locations.size(); i++)
     {
         if (uri.compare(0, server.locations[i].path.length(), server.locations[i].path) == 0)
@@ -514,7 +525,7 @@ bool Server::serveClient(int client_fd, Server::Request request)
 
         if (!isUriExists(request.uri, server))
         {
-            std::string response = buildResponse("", "", 404, "");
+            std::string response = buildResponse("", "", 404);
             send(client_fd, response.c_str(), response.length(), 0);
             return false;            
         }
@@ -523,14 +534,14 @@ bool Server::serveClient(int client_fd, Server::Request request)
             Webserv::Location location = getLocation(request.uri, server);
             if (!isMethodAllowed("GET", location))
             {
-                std::string response = buildResponse("", "", 405, "");
+                std::string response = buildResponse("", "", 405);
                 send(client_fd, response.c_str(), response.length(), 0);
                 return false;
             }
             std::string toSearch = location.root + request.uri;
             if (stat(toSearch.c_str(), &st) == -1)
             {
-                std::string response = buildResponse("", "", 404, "");
+                std::string response = buildResponse("", "", 404);
                 send(client_fd, response.c_str(), response.length(), 0);
                 return false;
             }
@@ -540,15 +551,14 @@ bool Server::serveClient(int client_fd, Server::Request request)
                 {
                     if (!atleastOneFileExists(location))
                     {
-                        std::cout << location.autoindex << std::endl;
                         if (!location.autoindex){
-                            std::string response = buildResponse("", "", 403, "");
+                            std::string response = buildResponse("", "", 403);
                             send(client_fd, response.c_str(), response.length(), 0);
                             return false;
                         }
                         else{
                             std::string body = dirlisntening_gen(request.uri, location.root + request.uri);
-                            std::string response = buildResponse(body, ".html", 200, "");
+                            std::string response = buildResponse(body, ".html", 200);
                             send(client_fd, response.c_str(), response.length(), 0);
                             return true;
                         }
@@ -558,13 +568,13 @@ bool Server::serveClient(int client_fd, Server::Request request)
                         std::string index_file = getFilethatExists(location);
                         if (access(index_file.c_str(), R_OK) == 0)
                         {
-                            std::string response = buildResponse(readFile(index_file), getExtension(index_file), 200, "");
+                            std::string response = buildResponse(readFile(index_file), getExtension(index_file), 200);
                             send(client_fd, response.c_str(), response.length(), 0);
                             return true;
                         }
                         else
                         {
-                            std::string response = buildResponse("", "", 403, "");
+                            std::string response = buildResponse("", "", 403);
                             send(client_fd, response.c_str(), response.length(), 0);
                             return false;
                         }
@@ -574,20 +584,20 @@ bool Server::serveClient(int client_fd, Server::Request request)
                 {
                     if (access(toSearch.c_str(), R_OK) == 0)
                     {
-                        std::string response = buildResponse(readFile(toSearch), getExtension(toSearch), 200, "");
+                        std::string response = buildResponse(readFile(toSearch), getExtension(toSearch), 200);
                         send(client_fd, response.c_str(), response.length(), 0);
                         return true;
                     }
                     else
                     {
-                        std::string response = buildResponse("", "", 403, "");
+                        std::string response = buildResponse("", "", 403);
                         send(client_fd, response.c_str(), response.length(), 0);
                         return false;
                     }
                 }
                 else
                 {
-                    std::string response = buildResponse("", "", 404, "");
+                    std::string response = buildResponse("", "", 404);
                     send(client_fd, response.c_str(), response.length(), 0);
                     return false;
                 }
@@ -600,7 +610,7 @@ bool Server::serveClient(int client_fd, Server::Request request)
         // struct stat st;
         // if (!isUriExists(request.uri, server))
         // {
-        //     std::string response = buildResponse("", "", 404, "");
+        //     std::string response = buildResponse("", "", 404);
         //     send(client_fd, response.c_str(), response.length(), 0);
         //     return false;            
         // }
@@ -609,14 +619,14 @@ bool Server::serveClient(int client_fd, Server::Request request)
         //     Webserv::Location location = getLocation(request.uri, server);
         //     if (!isMethodAllowed("DELETE", location))
         //     {
-        //         std::string response = buildResponse("", "", 405, "");
+        //         std::string response = buildResponse("", "", 405);
         //         send(client_fd, response.c_str(), response.length(), 0);
         //         return false;
         //     }
         //     std::string filepath = location.root + request.uri;
         //     if (stat(filepath.c_str(), &st) == -1)
         //     {
-        //         std::string response = buildResponse("", "", 404, "");
+        //         std::string response = buildResponse("", "", 404);
         //         send(client_fd, response.c_str(), response.length(), 0);
         //         return false;
         //     }
@@ -624,23 +634,23 @@ bool Server::serveClient(int client_fd, Server::Request request)
         //     {
         //         if (S_ISDIR(st.st_mode))
         //         {
-        //             std::string response = buildResponse("", "", 403, "");
+        //             std::string response = buildResponse("", "", 403);
         //             send(client_fd, response.c_str(), response.length(), 0);
         //             return false;
         //         }
         //         std::string file_dire = filepath.substr(0, filepath.find_last_of('/'));
         //         if (access(file_dire.c_str(), W_OK | X_OK) != 0)
         //         {
-        //             std::string response = buildResponse("", "", 403, "");
+        //             std::string response = buildResponse("", "", 403);
         //             send(client_fd, response.c_str(), response.length(), 0);
         //             return false;
         //         }
         //         if (unlink(filepath.c_str()) != 0){
-        //             std::string response = buildResponse("", "", 403, "");
+        //             std::string response = buildResponse("", "", 403);
         //             send(client_fd, response.c_str(), response.length(), 0);
         //             return false;
         //         }
-        //         std::string response = buildResponse("", "", 204, "");
+        //         std::string response = buildResponse("", "", 204);
         //         send(client_fd, response.c_str(), response.length(), 0);
         //         return false;
         //     }

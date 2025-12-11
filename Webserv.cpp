@@ -878,9 +878,19 @@ Webserv::Server Webserv::parseServer(size_t &i)
             break;
         }
     }
+    sortLocationPaths(server); // kansortiw locations bach manseb9och b / licatvalida dima
     return server;
 }
 
+bool Webserv::locationCmp(const Webserv::Location &l1, const Webserv::Location &l2)
+{
+    return l1.path.size() > l2.path.size();
+}
+
+void Webserv::sortLocationPaths(Webserv::Server &server) 
+{
+    std::sort(server.locations.begin(), server.locations.end(), locationCmp);
+}
 
 void Webserv::parseLocation(size_t &i, Webserv::Server &server, int &depth, bool &sawLocation)
 {
