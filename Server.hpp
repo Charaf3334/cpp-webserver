@@ -29,7 +29,7 @@ class Server : public Webserv
         bool parseRequest(int client_fd, std::string request_string, Server::Request &request);
         std::string readFile(const std::string file_path) const;
         std::string getExtension(std::string file_path);
-        std::string buildResponse(std::string file_content, std::string extension, int status);
+        std::string buildResponse(std::string file_content, std::string extension, int status, bool inRedirection, std::string newPath);
         std::vector<std::string> getheadersLines(const std::string req, bool &flag, int &error_status);
         bool parse_lines(std::vector<std::string> lines, Server::Request &request, int &error_status);
         bool parse_headers(std::string &str, Server::Request &request, int &error_status);
@@ -38,7 +38,7 @@ class Server : public Webserv
         bool parse_methode(std::string *words, int &error_status, Server::Request &request);
         bool parse_path(std::string &path);
         std::string tostring(size_t num) const;
-        bool serveClient(int client_fd, Server::Request request);
+        bool serveClient(int client_fd, Server::Request request, int stat_code, bool in_redirect);
         bool isUriExists(std::string uri, Webserv::Server server) const;
         Webserv::Location getLocation(std::string uri, Webserv::Server server);
         bool atleastOneFileExists(Webserv::Location location) const;

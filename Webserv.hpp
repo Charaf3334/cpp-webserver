@@ -37,9 +37,10 @@ class Webserv
             std::vector<std::string> index;
             bool isRedirection;
             bool redirectionIsText;
-            std::map<int, std::string> redirection;
+            bool redirect_relative;
+            bool redirect_absolute;
+            std::pair<int, std::string> redirection;
             std::string upload_dir;
-            std::map<std::string, std::string> cgi_file; // .py -> file
             bool hasCgi;
             std::map<size_t, std::string> error_pages; // each location error pages
         };

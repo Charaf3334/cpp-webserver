@@ -350,9 +350,8 @@ void Webserv::print_conf(void) {
             std::cout << "    Redirection: " << j << " " << (servers[i].locations[j].isRedirection ? "True" : "False") << std::endl;
             if (servers[i].locations[j].isRedirection)
             {
-                std::map<int, std::string>::iterator it = servers[i].locations[j].redirection.begin();
                 std::cout << "    is Text: " << (servers[i].locations[j].redirectionIsText ? "True" : "False") << std::endl;
-                std::cout << "    Code & URL/TEXT: " << it->first << " -> " << "|" << it->second << "|" << std::endl;
+                std::cout << "    Code & URL/TEXT: " << servers[i].locations[j].redirection.first << " -> " << "|" << servers[i].locations[j].redirection.second << "|" << std::endl;
             }
             std::cout << "    Upload: " << servers[i].locations[j].upload_dir << std::endl;
             std::cout << "    Cgi: " << (servers[i].locations[j].hasCgi ? "on" : "off") << std::endl;
@@ -742,7 +741,7 @@ bool Webserv::checkUrlText(size_t i, Location &location, bool code_present, int 
             throw std::runtime_error("Error: Return path not valid.");
         if (status_code != 301 && status_code != 302 && status_code != 303 && status_code != 307 && status_code != 308 && status_code != 444)
             throw std::runtime_error("Error: Code for return path incorrect.");
-        return true;
+        location.redirect_relative = true;
     }
     else if ((tokens[i][0] == 'h' && tokens[i][1] == 't' && tokens[i][2] == 't' && tokens[i][3] == 'p' && tokens[i][4] == ':'
         && tokens[i][5] == '/' && tokens[i][6] == '/') || (tokens[i][0] == 'h' && tokens[i][1] == 't' && tokens[i][2] == 't' && tokens[i][3] == 'p' && tokens[i][4] == 's'
@@ -763,6 +762,7 @@ bool Webserv::checkUrlText(size_t i, Location &location, bool code_present, int 
             domain = domain.substr(0, pos);
         }
         convertHostToIp(domain, "Error: Invalid domain name in return directive.");
+        location.redirect_absolute = true;
     }
     else
         return false;
@@ -784,6 +784,8 @@ void Webserv::locationDefaultInit(Location &location)
     location.redirectionIsText = false;
     location.upload_dir = "./uploads"; // default path
     location.hasCgi = false;
+    location.redirect_absolute = false;
+    location.redirect_relative = false;
 }
 
 bool Webserv::checkPath(const std::string path) const
@@ -1009,10 +1011,11 @@ void Webserv::parseLocation(size_t &i, Webserv::Server &server, int &depth, bool
                 throw std::runtime_error("Error: Invalid TEXT/URL after status code.");
             if (location.redirectionIsText)
             {
-                tokens[i][0] = 0;
-                tokens[i][tokens[i].length() - 1] = 0;
+                tokens[i].erase(0, 1);
+                tokens[i].erase(tokens[i].length() - 1, 1);
             }
-            location.redirection[status_code] = tokens[i];
+            location.redirection.first = status_code;
+            location.redirection.second = tokens[i];
             i++;
             if (tokens[i] != ";")
                 throw std::runtime_error("Error: Expected ';' at the end of return directive.");
