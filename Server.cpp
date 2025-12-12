@@ -525,7 +525,7 @@ bool Server::serveClient(int client_fd, Server::Request request)
 
         if (!isUriExists(request.uri, server))
         {
-            std::string response = buildResponse("Error: " + status_codes[404], "", 404);
+            std::string response = buildResponse("Error: " + status_codes[404] + "\n", "", 404);
             send(client_fd, response.c_str(), response.length(), 0);
             return false;            
         }
@@ -534,14 +534,14 @@ bool Server::serveClient(int client_fd, Server::Request request)
             Webserv::Location location = getLocation(request.uri, server);
             if (!isMethodAllowed("GET", location))
             {
-                std::string response = buildResponse("Error: " + status_codes[405], "", 405);
+                std::string response = buildResponse("Error: " + status_codes[405] + "\n", "", 405);
                 send(client_fd, response.c_str(), response.length(), 0);
                 return false;
             }
             std::string toSearch = location.root + request.uri;
             if (stat(toSearch.c_str(), &st) == -1)
             {
-                std::string response = buildResponse("Error: " + status_codes[404], "", 404);
+                std::string response = buildResponse("Error: " + status_codes[404] + "\n", "", 404);
                 send(client_fd, response.c_str(), response.length(), 0);
                 return false;
             }
@@ -552,7 +552,7 @@ bool Server::serveClient(int client_fd, Server::Request request)
                     if (!atleastOneFileExists(location))
                     {
                         if (!location.autoindex){
-                            std::string response = buildResponse("Error: " + status_codes[403], "", 403);
+                            std::string response = buildResponse("Error: " + status_codes[403] + "\n", "", 403);
                             send(client_fd, response.c_str(), response.length(), 0);
                             return false;
                         }
@@ -574,7 +574,7 @@ bool Server::serveClient(int client_fd, Server::Request request)
                         }
                         else
                         {
-                            std::string response = buildResponse("Error: " + status_codes[403], "", 403);
+                            std::string response = buildResponse("Error: " + status_codes[403] + "\n", "", 403);
                             send(client_fd, response.c_str(), response.length(), 0);
                             return false;
                         }
@@ -590,14 +590,14 @@ bool Server::serveClient(int client_fd, Server::Request request)
                     }
                     else
                     {
-                        std::string response = buildResponse("Error: " + status_codes[403], "", 403);
+                        std::string response = buildResponse("Error: " + status_codes[403] + "\n", "", 403);
                         send(client_fd, response.c_str(), response.length(), 0);
                         return false;
                     }
                 }
                 else
                 {
-                    std::string response = buildResponse("Error: " + status_codes[404], "", 404);
+                    std::string response = buildResponse("Error: " + status_codes[404] + "\n", "", 404);
                     send(client_fd, response.c_str(), response.length(), 0);
                     return false;
                 }
@@ -606,55 +606,55 @@ bool Server::serveClient(int client_fd, Server::Request request)
     }
     else if (request.method == "DELETE")
     {
-        // server = *clientfd_to_server[client_fd];
-        // struct stat st;
-        // if (!isUriExists(request.uri, server))
-        // {
-        //     std::string response = buildResponse("Error: " + status_codes[404], "", 404);
-        //     send(client_fd, response.c_str(), response.length(), 0);
-        //     return false;            
-        // }
-        // else
-        // {
-        //     Webserv::Location location = getLocation(request.uri, server);
-        //     if (!isMethodAllowed("DELETE", location))
-        //     {
-        //         std::string response = buildResponse("Error: " + status_codes[405], "", 405);
-        //         send(client_fd, response.c_str(), response.length(), 0);
-        //         return false;
-        //     }
-        //     std::string filepath = location.root + request.uri;
-        //     if (stat(filepath.c_str(), &st) == -1)
-        //     {
-        //         std::string response = buildResponse("Error: " + status_codes[404], "", 404);
-        //         send(client_fd, response.c_str(), response.length(), 0);
-        //         return false;
-        //     }
-        //     else
-        //     {
-        //         if (S_ISDIR(st.st_mode))
-        //         {
-        //             std::string response = buildResponse("Error: " + status_codes[403], "", 403);
-        //             send(client_fd, response.c_str(), response.length(), 0);
-        //             return false;
-        //         }
-        //         std::string file_dire = filepath.substr(0, filepath.find_last_of('/'));
-        //         if (access(file_dire.c_str(), W_OK | X_OK) != 0)
-        //         {
-        //             std::string response = buildResponse("Error: " + status_codes[403], "", 403);
-        //             send(client_fd, response.c_str(), response.length(), 0);
-        //             return false;
-        //         }
-        //         if (unlink(filepath.c_str()) != 0){
-        //             std::string response = buildResponse("Error: " + status_codes[403], "", 403);
-        //             send(client_fd, response.c_str(), response.length(), 0);
-        //             return false;
-        //         }
-        //         std::string response = buildResponse("", "", 204);
-        //         send(client_fd, response.c_str(), response.length(), 0);
-        //         return false;
-        //     }
-        // }
+        server = *clientfd_to_server[client_fd];
+        struct stat st;
+        if (!isUriExists(request.uri, server))
+        {
+            std::string response = buildResponse("Error: " + status_codes[404] + "\n", "", 404);
+            send(client_fd, response.c_str(), response.length(), 0);
+            return false;            
+        }
+        else
+        {
+            Webserv::Location location = getLocation(request.uri, server);
+            if (!isMethodAllowed("DELETE", location))
+            {
+                std::string response = buildResponse("Error: " + status_codes[405] + "\n", "", 405);
+                send(client_fd, response.c_str(), response.length(), 0);
+                return false;
+            }
+            std::string filepath = location.root + request.uri;
+            if (stat(filepath.c_str(), &st) == -1)
+            {
+                std::string response = buildResponse("Error: " + status_codes[404] + "\n", "", 404);
+                send(client_fd, response.c_str(), response.length(), 0);
+                return false;
+            }
+            else
+            {
+                if (S_ISDIR(st.st_mode))
+                {
+                    std::string response = buildResponse("Error: " + status_codes[403] + "\n", "", 403);
+                    send(client_fd, response.c_str(), response.length(), 0);
+                    return false;
+                }
+                std::string file_dire = filepath.substr(0, filepath.find_last_of('/'));
+                if (access(file_dire.c_str(), W_OK | X_OK) != 0)
+                {
+                    std::string response = buildResponse("Error: " + status_codes[403] + "\n", "", 403);
+                    send(client_fd, response.c_str(), response.length(), 0);
+                    return false;
+                }
+                if (unlink(filepath.c_str()) != 0){
+                    std::string response = buildResponse("Error: " + status_codes[403] + "\n", "", 403);
+                    send(client_fd, response.c_str(), response.length(), 0);
+                    return false;
+                }
+                std::string response = buildResponse("", "", 204);
+                send(client_fd, response.c_str(), response.length(), 0);
+                return false;
+            }
+        }
     }
     else if (request.method == "POST")
     {
