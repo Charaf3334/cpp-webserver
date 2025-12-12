@@ -735,8 +735,11 @@ bool Webserv::checkUrlText(size_t i, Location &location, bool code_present, int 
         }
         return false;
     }
-    else if (tokens[i][0] == '/' && tokens[i][1] != '/')
+    else if (tokens[i][0] == '/')
     {
+        size_t pos = tokens[i].find("//");
+        if (pos != std::string::npos)
+            throw std::runtime_error("Error: Return path not valid.");
         if (status_code != 301 && status_code != 302 && status_code != 303 && status_code != 307 && status_code != 308 && status_code != 444)
             throw std::runtime_error("Error: Code for return path incorrect.");
         return true;
