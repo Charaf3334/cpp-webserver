@@ -121,7 +121,7 @@ std::string Server::readRequest(int client_fd)
         if (bytes <= 0) // connection closed or error
         {
             if (bytes == 0)
-                std::cerr << "User Disconnected" << std::endl;
+                // std::cerr << "User Disconnected" << std::endl;
             break;
         }
         request.append(temp_buffer, bytes);
@@ -419,17 +419,20 @@ bool Server::parseRequest(int client_fd, std::string request_string, Server::Req
     return true;
 }
 
-bool Server::isUriExists(std::string uri, Webserv::Server server) const
+bool Server::isUriExists(std::string uri, Webserv::Server server, bool flag) const
 {
     for (size_t i = 0; i < server.locations.size(); i++)
     {
         if (server.locations[i].path == uri)
             return true;
     }
-    for (size_t i = 0; i < server.locations.size(); i++)
+    if (!flag)
     {
-        if (uri.compare(0, server.locations[i].path.length(), server.locations[i].path) == 0)
-            return true;
+        for (size_t i = 0; i < server.locations.size(); i++)
+        {
+            if (uri.compare(0, server.locations[i].path.length(), server.locations[i].path) == 0)
+                return true;
+        }
     }
     return false;
 }
@@ -525,8 +528,9 @@ bool Server::serveClient(int client_fd, Server::Request request)
     {
         server = *clientfd_to_server[client_fd];
         struct stat st;
+        std::cout << request.uri << std::endl;
 
-        if (!isUriExists(request.uri, server))
+        if (!isUriExists(request.uri, server, false))
         {
             std::string response = buildResponse("Error: " + status_codes[404] + "\n", "", 404, false, "");
             send(client_fd, response.c_str(), response.length(), 0);
@@ -544,11 +548,12 @@ bool Server::serveClient(int client_fd, Server::Request request)
             if (location.isRedirection) {
                 if (!location.redirectionIsText) {
                     if (location.redirect_relative) {
-                        Server::Request redirect_request;
-                        redirect_request.method = "GET";
-                        redirect_request.http_version = "HTTP/1.1";
-                        redirect_request.uri = location.redirection.second;
-                        redirect_request.headers["host"] = server.ip_address + ":" + tostring(server.port);
+                        if (!isUriExists(location.redirection.second, server, true)) // hadi drnaha 3la hsab return location wach exists
+                        {
+                            std::string response = buildResponse("Error: " + status_codes[404] + "\n", "", 404, false, "");
+                            send(client_fd, response.c_str(), response.length(), 0);
+                            return false;            
+                        }
                         std::string response = buildResponse("", "", location.redirection.first, true, location.redirection.second);
                         send(client_fd, response.c_str(), response.length(), 0);
                         return true;
@@ -636,7 +641,7 @@ bool Server::serveClient(int client_fd, Server::Request request)
     {
         server = *clientfd_to_server[client_fd];
         struct stat st;
-        if (!isUriExists(request.uri, server))
+        if (!isUriExists(request.uri, server, false))
         {
             std::string response = buildResponse("Error: " + status_codes[404] + "\n", "", 404, false, "");
             send(client_fd, response.c_str(), response.length(), 0);
@@ -769,7 +774,7 @@ void Server::initialize(void)
                 int client_fd = accept(fd, reinterpret_cast<sockaddr*>(&client_addr), &client_len);
                 if (client_fd != -1)
                 {
-                    std::cout << "New client connected ..." << std::endl;
+                    // std::cout << "New client connected ..." << std::endl;
                     setNonBlockingFD(client_fd);
                     this->clientfd_to_server[client_fd] = this->sockfd_to_server[fd];
                     epoll_event ev;
