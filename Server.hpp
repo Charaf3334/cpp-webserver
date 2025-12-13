@@ -38,7 +38,7 @@ class Server : public Webserv
         bool parse_methode(std::string *words, int &error_status, Server::Request &request);
         bool parse_path(std::string &path);
         std::string tostring(size_t num) const;
-        bool serveClient(int client_fd, Server::Request request, int stat_code, bool in_redirect);
+        bool serveClient(int client_fd, Server::Request request);
         bool isUriExists(std::string uri, Webserv::Server server) const;
         Webserv::Location getLocation(std::string uri, Webserv::Server server);
         bool atleastOneFileExists(Webserv::Location location) const;

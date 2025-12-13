@@ -518,7 +518,7 @@ std::string dirlisntening_gen(std::string request_uri, std::string path)
     return html_text;
 }
 
-bool Server::serveClient(int client_fd, Server::Request request, int stat_code, bool in_redirect)
+bool Server::serveClient(int client_fd, Server::Request request)
 {
     Webserv::Server server;
     if (request.method == "GET")
@@ -549,7 +549,8 @@ bool Server::serveClient(int client_fd, Server::Request request, int stat_code, 
                         redirect_request.http_version = "HTTP/1.1";
                         redirect_request.uri = location.redirection.second;
                         redirect_request.headers["host"] = server.ip_address + ":" + tostring(server.port);
-                        serveClient(client_fd, redirect_request, location.redirection.first, true);
+                        std::string response = buildResponse("", "", location.redirection.first, true, location.redirection.second);
+                        send(client_fd, response.c_str(), response.length(), 0);
                         return true;
                     }
                     else if (location.redirect_absolute) {
@@ -585,7 +586,7 @@ bool Server::serveClient(int client_fd, Server::Request request, int stat_code, 
                         }
                         else{
                             std::string body = dirlisntening_gen(request.uri, location.root + request.uri);
-                            std::string response = buildResponse(body, ".html", stat_code ? stat_code : 200, in_redirect, request.uri);
+                            std::string response = buildResponse(body, ".html", 200, false, "");
                             send(client_fd, response.c_str(), response.length(), 0);
                             return true;
                         }
@@ -595,7 +596,7 @@ bool Server::serveClient(int client_fd, Server::Request request, int stat_code, 
                         std::string index_file = getFilethatExists(location);
                         if (!index_file.empty())
                         {
-                            std::string response = buildResponse(readFile(index_file), getExtension(index_file), stat_code ? stat_code : 200, in_redirect, request.uri);
+                            std::string response = buildResponse(readFile(index_file), getExtension(index_file), 200, false, "");
                             send(client_fd, response.c_str(), response.length(), 0);
                             return true;
                         }
@@ -611,7 +612,7 @@ bool Server::serveClient(int client_fd, Server::Request request, int stat_code, 
                 {
                     if (access(toSearch.c_str(), R_OK) == 0)
                     {
-                        std::string response = buildResponse(readFile(toSearch), getExtension(toSearch), stat_code ? stat_code : 200, in_redirect, request.uri);
+                        std::string response = buildResponse(readFile(toSearch), getExtension(toSearch), 200, false, "");
                         send(client_fd, response.c_str(), response.length(), 0);
                         return true;
                     }
@@ -792,7 +793,7 @@ void Server::initialize(void)
                     close(fd);
                     continue;
                 }
-                if (!serveClient(fd, request, 0, false))
+                if (!serveClient(fd, request))
                 {
                     close(fd);
                     continue;
