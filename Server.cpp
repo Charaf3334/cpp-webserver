@@ -528,7 +528,6 @@ bool Server::serveClient(int client_fd, Server::Request request)
     {
         server = *clientfd_to_server[client_fd];
         struct stat st;
-        std::cout << request.uri << std::endl;
 
         if (!isUriExists(request.uri, server, false))
         {
