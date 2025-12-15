@@ -14,13 +14,16 @@ class Server : public Webserv
             std::string uri;
             std::string http_version;
             std::map<std::string, std::string> headers;
+            bool keep_alive;
             std::string body;
         };
         static Server* instance;
         std::vector<int> socket_fds;
+        std::vector<int> client_fds;
         std::map<int, Webserv::Server*> sockfd_to_server;
         std::map<int, Webserv::Server*> clientfd_to_server; // KEY=FD this is the map we will use to serve clients per servers
         bool shutdownFlag;
+
         bool setNonBlockingFD(const int fd) const;
         sockaddr_in infos(const Webserv::Server server) const;
         void closeSockets(void);
@@ -29,8 +32,8 @@ class Server : public Webserv
         bool parseRequest(int client_fd, std::string request_string, Server::Request &request);
         std::string readFile(const std::string file_path) const;
         std::string getExtension(std::string file_path);
-        std::string buildResponse(std::string file_content, std::string extension, int status, bool inRedirection, std::string newPath);
-        std::vector<std::string> getheadersLines(const std::string req, bool &flag, int &error_status);
+        std::string buildResponse(std::string file_content, std::string extension, int status, bool inRedirection, std::string newPath, bool keep_alive);
+        std::vector<std::string> getheadersLines(const std::string req, bool &flag, int &error_status, std::string &body);
         bool parse_lines(std::vector<std::string> lines, Server::Request &request, int &error_status);
         bool parse_headers(std::string &str, Server::Request &request, int &error_status);
         std::string str_tolower(std::string str);
@@ -44,6 +47,7 @@ class Server : public Webserv
         bool atleastOneFileExists(Webserv::Location location) const;
         std::string getFilethatExists(Webserv::Location location) const;
         bool isMethodAllowed(std::string method, Webserv::Location location) const;
+        void closeClient(int epoll_fd, int client_fd, bool inside_loop);
     public:
         Server(Webserv webserv);
         Server(const Server &theOtherObject);

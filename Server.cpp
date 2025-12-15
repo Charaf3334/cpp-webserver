@@ -87,7 +87,7 @@ std::string Server::tostring(size_t num) const
     return strnum.str();
 }
 
-std::string Server::buildResponse(std::string file_content, std::string extension, int status, bool inRedirection, std::string newPath)
+std::string Server::buildResponse(std::string file_content, std::string extension, int status, bool inRedirection, std::string newPath, bool keep_alive)
 {
     std::string CRLF = "\r\n";
     std::string start_line = "HTTP/1.1 " + tostring(status) + " " + status_codes[status] + CRLF;
@@ -102,7 +102,7 @@ std::string Server::buildResponse(std::string file_content, std::string extensio
     if (inRedirection)
         location = "Location: " + newPath + CRLF;
     std::string content_length = "Content-Length: " + tostring(file_content.length()) + CRLF;
-    std::string connection = "Connection: close" + CRLF + CRLF; // two CRLF mean ending the headers , still need to check what does this mean and when to make it keep-alive vs close
+    std::string connection = std::string("Connection: ") + (keep_alive ? "keep-alive" : "close") + CRLF + CRLF; // two CRLF mean ending the headers , still need to check what does this mean and when to make it keep-alive vs close
     std::string response = start_line + content_type + location + content_length + connection + file_content;
     return response;
 }
@@ -121,7 +121,7 @@ std::string Server::readRequest(int client_fd)
         if (bytes <= 0) // connection closed or error
         {
             if (bytes == 0)
-                // std::cerr << "User Disconnected" << std::endl;
+                std::cerr << "User Disconnected" << std::endl;
             break;
         }
         request.append(temp_buffer, bytes);
@@ -160,7 +160,7 @@ std::string Server::readRequest(int client_fd)
     return request;
 }
 
-std::vector<std::string> Server::getheadersLines(const std::string req, bool &flag, int &error_status)
+std::vector<std::string> Server::getheadersLines(const std::string req, bool &flag, int &error_status, std::string &body)
 {
     std::string sub_req;
 	std::vector<std::string> lines;
@@ -200,6 +200,7 @@ std::vector<std::string> Server::getheadersLines(const std::string req, bool &fl
         error_status = 400;
 		return lines;
     }
+    body = req.substr(pos + 4);
 	return lines;
 }
 
@@ -389,6 +390,12 @@ bool Server::parse_lines(std::vector<std::string> lines, Server::Request &reques
         if (request.method == "POST")
         {
             // here we need to check for content-length and transfer-encoding
+            found = request.headers.find("content-length");
+            if (found == request.headers.end())
+            {
+                error_status = 400;
+                return false;
+            }
         }
     }
 	return true;
@@ -398,23 +405,39 @@ bool Server::parseRequest(int client_fd, std::string request_string, Server::Req
 {
     bool flag = true;
     int error_status = 0;
-    if (request_string.empty())
-    {
-        error_status = 400;
-        return false;
-    }
-    std::vector<std::string> lines = getheadersLines(request_string, flag, error_status);
+    std::string body;
+    std::vector<std::string> lines = getheadersLines(request_string, flag, error_status, body);
     if (!flag)
     {
-        std::string response = buildResponse("", "", error_status, false, "");
+        std::string response = buildResponse("Error: " + status_codes[error_status] + "\n", "", error_status, false, "", false);
         send(client_fd, response.c_str(), response.length(), 0);
         return false;
     }
     if (!parse_lines(lines, request, error_status))
     {
-        std::string response = buildResponse("", "", error_status, false, "");
+        std::string response = buildResponse("Error: " + status_codes[error_status] + "\n", "", error_status, false, "", false);
         send(client_fd, response.c_str(), response.length(), 0);
         return false;
+    }
+    if (!isstrdigit(request.headers["content-length"])) // check content-length
+    {
+        std::string response = buildResponse("Error: " + status_codes[400] + "\n", "", 400, false, "", false);
+        send(client_fd, response.c_str(), response.length(), 0);
+        return false;
+    }
+    request.body = body.substr(0, atoll(request.headers["content-length"].c_str()));
+    std::map<std::string, std::string>::iterator found = request.headers.find("connection");
+    if (request.http_version == "HTTP/1.1")
+    {
+        request.keep_alive = true;
+        if (found != request.headers.end() && found->second == "close")
+            request.keep_alive = false;
+    } 
+    else 
+    {
+        request.keep_alive = false;
+        if (found != request.headers.end() && found->second == "keep-alive")
+            request.keep_alive = true;
     }
     return true;
 }
@@ -465,7 +488,10 @@ bool Server::atleastOneFileExists(Webserv::Location location) const
     for (size_t i = 0; i < location.index.size(); i++)
     {
         if (stat(location.index[i].c_str(), &st) == -1)
+        {
             counter++;
+            continue;
+        }
         if (S_ISDIR(st.st_mode))
             counter++;
     }
@@ -531,7 +557,7 @@ bool Server::serveClient(int client_fd, Server::Request request)
 
         if (!isUriExists(request.uri, server, false))
         {
-            std::string response = buildResponse("Error: " + status_codes[404] + "\n", "", 404, false, "");
+            std::string response = buildResponse("Error: " + status_codes[404] + "\n", "", 404, false, "", request.keep_alive);
             send(client_fd, response.c_str(), response.length(), 0);
             return false;            
         }
@@ -540,32 +566,36 @@ bool Server::serveClient(int client_fd, Server::Request request)
             Webserv::Location location = getLocation(request.uri, server);
             if (!isMethodAllowed("GET", location))
             {
-                std::string response = buildResponse("Error: " + status_codes[405] + "\n", "", 405, false, "");
+                std::string response = buildResponse("Error: " + status_codes[405] + "\n", "", 405, false, "", request.keep_alive);
                 send(client_fd, response.c_str(), response.length(), 0);
                 return false;
             }
-            if (location.isRedirection) {
-                if (!location.redirectionIsText) {
-                    if (location.redirect_relative) {
+            if (location.isRedirection) 
+            {
+                if (!location.redirectionIsText) 
+                {
+                    if (location.redirect_relative) 
+                    {
                         if (!isUriExists(location.redirection.second, server, true)) // hadi drnaha 3la hsab return location wach exists
                         {
-                            std::string response = buildResponse("Error: " + status_codes[404] + "\n", "", 404, false, "");
+                            std::string response = buildResponse("Error: " + status_codes[404] + "\n", "", 404, false, "", request.keep_alive);
                             send(client_fd, response.c_str(), response.length(), 0);
                             return false;            
                         }
-                        std::string response = buildResponse("", "", location.redirection.first, true, location.redirection.second);
+                        std::string response = buildResponse("", "", location.redirection.first, true, location.redirection.second, request.keep_alive);
                         send(client_fd, response.c_str(), response.length(), 0);
                         return true;
                     }
-                    else if (location.redirect_absolute) {
-                        std::string response = buildResponse("", "", location.redirection.first, true, location.redirection.second);
+                    else if (location.redirect_absolute) 
+                    {
+                        std::string response = buildResponse("", "", location.redirection.first, true, location.redirection.second, request.keep_alive);
                         send(client_fd, response.c_str(), response.length(), 0);
                         return true;
                     }
                 }
                 else
                 {
-                    std::string response = buildResponse(location.redirection.second, "", location.redirection.first, false, "");
+                    std::string response = buildResponse(location.redirection.second, "", location.redirection.first, false, "", request.keep_alive);
                     send(client_fd, response.c_str(), response.length(), 0);
                     return true;
                 }
@@ -573,7 +603,7 @@ bool Server::serveClient(int client_fd, Server::Request request)
             std::string toSearch = location.root + request.uri;
             if (stat(toSearch.c_str(), &st) == -1)
             {
-                std::string response = buildResponse("Error: " + status_codes[404] + "\n", "", 404, false, "");
+                std::string response = buildResponse("Error: " + status_codes[404] + "\n", "", 404, false, "", request.keep_alive);
                 send(client_fd, response.c_str(), response.length(), 0);
                 return false;
             }
@@ -583,14 +613,16 @@ bool Server::serveClient(int client_fd, Server::Request request)
                 {
                     if (!atleastOneFileExists(location))
                     {
-                        if (!location.autoindex){
-                            std::string response = buildResponse("Error: " + status_codes[403] + "\n", "", 403, false, "");
+                        if (!location.autoindex)
+                        {
+                            std::string response = buildResponse("Error: " + status_codes[403] + "\n", "", 403, false, "", request.keep_alive);
                             send(client_fd, response.c_str(), response.length(), 0);
                             return false;
                         }
-                        else{
+                        else
+                        {
                             std::string body = dirlisntening_gen(request.uri, location.root + request.uri);
-                            std::string response = buildResponse(body, ".html", 200, false, "");
+                            std::string response = buildResponse(body, ".html", 200, false, "", request.keep_alive);
                             send(client_fd, response.c_str(), response.length(), 0);
                             return true;
                         }
@@ -600,13 +632,13 @@ bool Server::serveClient(int client_fd, Server::Request request)
                         std::string index_file = getFilethatExists(location);
                         if (!index_file.empty())
                         {
-                            std::string response = buildResponse(readFile(index_file), getExtension(index_file), 200, false, "");
+                            std::string response = buildResponse(readFile(index_file), getExtension(index_file), 200, false, "", request.keep_alive);
                             send(client_fd, response.c_str(), response.length(), 0);
                             return true;
                         }
                         else
                         {
-                            std::string response = buildResponse("Error: " + status_codes[403] + "\n", "", 403, false, "");
+                            std::string response = buildResponse("Error: " + status_codes[403] + "\n", "", 403, false, "", request.keep_alive);
                             send(client_fd, response.c_str(), response.length(), 0);
                             return false;
                         }
@@ -616,20 +648,20 @@ bool Server::serveClient(int client_fd, Server::Request request)
                 {
                     if (access(toSearch.c_str(), R_OK) == 0)
                     {
-                        std::string response = buildResponse(readFile(toSearch), getExtension(toSearch), 200, false, "");
+                        std::string response = buildResponse(readFile(toSearch), getExtension(toSearch), 200, false, "", request.keep_alive);
                         send(client_fd, response.c_str(), response.length(), 0);
                         return true;
                     }
                     else
                     {
-                        std::string response = buildResponse("Error: " + status_codes[403] + "\n", "", 403, false, "");
+                        std::string response = buildResponse("Error: " + status_codes[403] + "\n", "", 403, false, "", request.keep_alive);
                         send(client_fd, response.c_str(), response.length(), 0);
                         return false;
                     }
                 }
                 else
                 {
-                    std::string response = buildResponse("Error: " + status_codes[404] + "\n", "", 404, false, "");
+                    std::string response = buildResponse("Error: " + status_codes[404] + "\n", "", 404, false, "", request.keep_alive);
                     send(client_fd, response.c_str(), response.length(), 0);
                     return false;
                 }
@@ -642,7 +674,7 @@ bool Server::serveClient(int client_fd, Server::Request request)
         struct stat st;
         if (!isUriExists(request.uri, server, false))
         {
-            std::string response = buildResponse("Error: " + status_codes[404] + "\n", "", 404, false, "");
+            std::string response = buildResponse("Error: " + status_codes[404] + "\n", "", 404, false, "", request.keep_alive);
             send(client_fd, response.c_str(), response.length(), 0);
             return false;            
         }
@@ -651,14 +683,14 @@ bool Server::serveClient(int client_fd, Server::Request request)
             Webserv::Location location = getLocation(request.uri, server);
             if (!isMethodAllowed("DELETE", location))
             {
-                std::string response = buildResponse("Error: " + status_codes[405] + "\n", "", 405, false, "");
+                std::string response = buildResponse("Error: " + status_codes[405] + "\n", "", 405, false, "", request.keep_alive);
                 send(client_fd, response.c_str(), response.length(), 0);
                 return false;
             }
             std::string filepath = location.root + request.uri;
             if (stat(filepath.c_str(), &st) == -1)
             {
-                std::string response = buildResponse("Error: " + status_codes[404] + "\n", "", 404, false, "");
+                std::string response = buildResponse("Error: " + status_codes[404] + "\n", "", 404, false, "", request.keep_alive);
                 send(client_fd, response.c_str(), response.length(), 0);
                 return false;
             }
@@ -666,23 +698,24 @@ bool Server::serveClient(int client_fd, Server::Request request)
             {
                 if (S_ISDIR(st.st_mode))
                 {
-                    std::string response = buildResponse("Error: " + status_codes[403] + "\n", "", 403, false, "");
+                    std::string response = buildResponse("Error: " + status_codes[403] + "\n", "", 403, false, "", request.keep_alive);
                     send(client_fd, response.c_str(), response.length(), 0);
                     return false;
                 }
                 std::string file_dire = filepath.substr(0, filepath.find_last_of('/'));
                 if (access(file_dire.c_str(), W_OK | X_OK) != 0)
                 {
-                    std::string response = buildResponse("Error: " + status_codes[403] + "\n", "", 403, false, "");
+                    std::string response = buildResponse("Error: " + status_codes[403] + "\n", "", 403, false, "", request.keep_alive);
                     send(client_fd, response.c_str(), response.length(), 0);
                     return false;
                 }
-                if (unlink(filepath.c_str()) != 0){
-                    std::string response = buildResponse("Error: " + status_codes[403] + "\n", "", 403, false, "");
+                if (unlink(filepath.c_str()) != 0)
+                {
+                    std::string response = buildResponse("Error: " + status_codes[403] + "\n", "", 403, false, "", request.keep_alive);
                     send(client_fd, response.c_str(), response.length(), 0);
                     return false;
                 }
-                std::string response = buildResponse("", "", 204, false, "");
+                std::string response = buildResponse("", "", 204, false, "", request.keep_alive);
                 send(client_fd, response.c_str(), response.length(), 0);
                 return false;
             }
@@ -690,9 +723,38 @@ bool Server::serveClient(int client_fd, Server::Request request)
     }
     else if (request.method == "POST")
     {
+        server = *clientfd_to_server[client_fd];
+        struct stat st;
+        (void)st;
 
+        if (!isUriExists(request.uri, server, false))
+        {
+            std::string response = buildResponse("Error: " + status_codes[404] + "\n", "", 404, false, "", request.keep_alive);
+            send(client_fd, response.c_str(), response.length(), 0);
+            return false;
+        }
+        else
+        {
+            Webserv::Location location = getLocation(request.uri, server);
+            // std::cout << "body: " << request.body << std::endl;
+            // std::cout << request.body.length() << std::endl;
+            if (!isMethodAllowed("POST", location))
+            {
+                std::string response = buildResponse("Error: " + status_codes[405] + "\n", "", 405, false, "", request.keep_alive);
+                send(client_fd, response.c_str(), response.length(), 0);
+                return false;
+            }
+        }
     }
     return true;
+}
+
+void Server::closeClient(int epoll_fd, int client_fd, bool inside_loop)
+{
+    if (inside_loop)
+        this->client_fds.erase(std::remove(client_fds.begin(), client_fds.end(), client_fd), client_fds.end());
+    epoll_ctl(epoll_fd, EPOLL_CTL_DEL, client_fd, NULL);
+    close(client_fd);
 }
 
 void Server::initialize(void)
@@ -771,6 +833,7 @@ void Server::initialize(void)
                 sockaddr_in client_addr;
                 socklen_t client_len = sizeof(client_addr);
                 int client_fd = accept(fd, reinterpret_cast<sockaddr*>(&client_addr), &client_len);
+                this->client_fds.push_back(client_fd);
                 if (client_fd != -1)
                 {
                     // std::cout << "New client connected ..." << std::endl;
@@ -785,26 +848,33 @@ void Server::initialize(void)
             else
             {
                 std::string request_string = readRequest(fd);
-                if (request_string.empty()) // keeping connection alive until user disconnects
+                if (request_string.empty()) // client disconnected
                 { 
-                    close(fd);
+                    closeClient(epoll_fd, fd, true);
                     continue;
                 }
                 // std::cout << request_string << std::endl;
                 Server::Request request;
                 if (!parseRequest(fd, request_string, request))
                 {
-                    close(fd);
+                    closeClient(epoll_fd, fd, true);
                     continue;
                 }
                 if (!serveClient(fd, request))
                 {
-                    close(fd);
+                    closeClient(epoll_fd, fd, true);
+                    continue;
+                }
+                if (!request.keep_alive)
+                {
+                    closeClient(epoll_fd, fd, true);
                     continue;
                 }
             }
         }
     }
     this->closeSockets();
+    for (size_t i = 0; i < this->client_fds.size(); i++)
+        closeClient(epoll_fd, client_fds[i], false);
     close(epoll_fd);
 }
