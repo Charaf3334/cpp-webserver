@@ -71,3 +71,11 @@ to do:
     HTTP/1.0 CONNECTION CLOSE
 
     - serviw error pages
+    
+    -   printf "GET / HTTP/1.0\r\n\r\n" | nc localhost 8080
+        HTTP/1.0 400 Bad Request
+        Content-Type: text/plain
+        Content-Length: 19
+        Connection: close
+
+        Error: Bad Request

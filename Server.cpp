@@ -832,12 +832,12 @@ void Server::initialize(void)
                 sockaddr_in client_addr;
                 socklen_t client_len = sizeof(client_addr);
                 int client_fd = accept(fd, reinterpret_cast<sockaddr*>(&client_addr), &client_len);
-                this->client_fds.push_back(client_fd);
                 if (client_fd != -1)
                 {
                     // std::cout << "New client connected ..." << std::endl;
                     setNonBlockingFD(client_fd);
                     this->clientfd_to_server[client_fd] = this->sockfd_to_server[fd];
+                    this->client_fds.push_back(client_fd);
                     epoll_event ev;
                     ev.events = EPOLLIN;
                     ev.data.fd = client_fd;
