@@ -48,6 +48,7 @@ class Server : public Webserv
         std::string getFilethatExists(Webserv::Location location) const;
         bool isMethodAllowed(std::string method, Webserv::Location location) const;
         void closeClient(int epoll_fd, int client_fd, bool inside_loop);
+        std::string buildErrorPage(int code);
     public:
         Server(Webserv webserv);
         Server(const Server &theOtherObject);

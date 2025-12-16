@@ -194,12 +194,12 @@ std::vector<std::string> Server::getheadersLines(const std::string req, bool &fl
 		    return lines;
         }
 	}
-	if (lines.size() == 1)
-    {
-		flag = false;
-        error_status = 400;
-		return lines;
-    }
+	// if (lines.size() == 1) // hadi khsha t7yd bach ndwzo GET / HTTP/1.0\r\n\r\n
+    // {
+	// 	flag = false;
+    //     error_status = 400;
+	// 	return lines;
+    // }
     body = req.substr(pos + 4);
 	return lines;
 }
@@ -234,6 +234,11 @@ bool Server::parse_methode(std::string *words, int &error_status, Server::Reques
 			return false;
 		}
 	}
+    if (words[0] == "PATCH" || words[0] == "PUT" || words[0] == "HEAD" || words[0] == "OPTIONS")
+    {
+        error_status = 501;
+        return false;
+    }
 	if (words[0] != "GET" && words[0] != "POST" && words[0] != "DELETE")
     {
 		error_status = 400;
@@ -256,7 +261,7 @@ bool Server::parse_methode(std::string *words, int &error_status, Server::Reques
 	}
 	if (words[2] != "HTTP/1.0" && words[2] != "HTTP/1.1")
     {
-		error_status = 505;
+		error_status = 400;
 		return false;
 	}
     request.method = words[0];
@@ -333,15 +338,6 @@ bool Server::parse_headers(std::string &line, Server::Request &request, int &err
         return false;
     }
     std::string second = line.substr(pos);
-    if (request.http_version == "HTTP/1.1")
-    {
-            std::map<std::string, std::string>::iterator found = request.headers.find(first);
-            if (found != request.headers.end() && (first == "host" || first == "content-length" || first == "transfer-encoding"))
-            {
-                    error_status = 400;
-                    return false;
-            }
-    }
     request.headers[first] = second;
 	return true;
 }
@@ -379,23 +375,14 @@ bool Server::parse_lines(std::vector<std::string> lines, Server::Request &reques
 				return false;
 		}
 	}
-    if (request.http_version == "HTTP/1.1")
+    if (request.method == "POST")
     {
-        std::map<std::string, std::string>::iterator found = request.headers.find("host");
+        std::map<std::string, std::string>::iterator found = request.headers.find("content-length");
+        found = request.headers.find("content-length");
         if (found == request.headers.end())
         {
             error_status = 400;
             return false;
-        }
-        if (request.method == "POST")
-        {
-            // here we need to check for content-length and transfer-encoding
-            found = request.headers.find("content-length");
-            if (found == request.headers.end())
-            {
-                error_status = 400;
-                return false;
-            }
         }
     }
 	return true;
@@ -409,36 +396,27 @@ bool Server::parseRequest(int client_fd, std::string request_string, Server::Req
     std::vector<std::string> lines = getheadersLines(request_string, flag, error_status, body);
     if (!flag)
     {
-        std::string response = buildResponse("Error: " + status_codes[error_status] + "\n", "", error_status, false, "", false);
+        std::string response = buildResponse(buildErrorPage(error_status), ".html", error_status, false, "", false);
         send(client_fd, response.c_str(), response.length(), 0);
         return false;
     }
     if (!parse_lines(lines, request, error_status))
     {
-        std::string response = buildResponse("Error: " + status_codes[error_status] + "\n", "", error_status, false, "", false);
+        std::string response = buildResponse(buildErrorPage(error_status), ".html", error_status, false, "", false);
         send(client_fd, response.c_str(), response.length(), 0);
         return false;
     }
     if (!isstrdigit(request.headers["content-length"])) // check content-length
     {
-        std::string response = buildResponse("Error: " + status_codes[400] + "\n", "", 400, false, "", false);
+        std::string response = buildResponse(buildErrorPage(400), ".html", 400, false, "", false);
         send(client_fd, response.c_str(), response.length(), 0);
         return false;
     }
     request.body = body.substr(0, atoll(request.headers["content-length"].c_str()));
     std::map<std::string, std::string>::iterator found = request.headers.find("connection");
-    if (request.http_version == "HTTP/1.1")
-    {
+    request.keep_alive = false;
+    if (found != request.headers.end() && found->second == "keep-alive")
         request.keep_alive = true;
-        if (found != request.headers.end() && found->second == "close")
-            request.keep_alive = false;
-    } 
-    else 
-    {
-        request.keep_alive = false;
-        if (found != request.headers.end() && found->second == "keep-alive")
-            request.keep_alive = true;
-    }
     return true;
 }
 
@@ -547,6 +525,52 @@ std::string dirlisntening_gen(std::string request_uri, std::string path)
     return html_text;
 }
 
+std::string Server::buildErrorPage(int code)
+{
+    std::string html = 
+        "<!DOCTYPE html>\n"
+        "<html lang=\"en\">\n"
+        "<head>\n"
+        "    <meta charset=\"UTF-8\">\n"
+        "    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n"
+        "    <title>" + tostring(code) + std::string(" ") + status_codes[code] + "</title>\n"
+        "    <style>\n"
+        "        body {\n"
+        "            display: flex;\n"
+        "            flex-direction: column;\n"
+        "            justify-content: center;\n"
+        "            align-items: center;\n"
+        "            height: 100vh;\n"
+        "            margin: 0;\n"
+        "            font-family: Arial, sans-serif;\n"
+        "            background-color: #f8f8f8;\n"
+        "            color: #333;\n"
+        "        }\n"
+        "        h1 {\n"
+        "            font-size: 6em;\n"
+        "            margin: 0;\n"
+        "        }\n"
+        "        p {\n"
+        "            font-size: 1.5em;\n"
+        "        }\n"
+        "        a {\n"
+        "            margin-top: 20px;\n"
+        "            text-decoration: none;\n"
+        "            color: #007BFF;\n"
+        "        }\n"
+        "        a:hover {\n"
+        "            text-decoration: underline;\n"
+        "        }\n"
+        "    </style>\n"
+        "</head>\n"
+        "<body>\n"
+        "    <h1>" + tostring(code) + "</h1>\n"
+        "    <p>" + status_codes[code] + "</p>\n"
+        "</body>\n"
+        "</html>\n";
+    return html;
+}
+
 bool Server::serveClient(int client_fd, Server::Request request)
 {
     Webserv::Server server;
@@ -557,7 +581,7 @@ bool Server::serveClient(int client_fd, Server::Request request)
 
         if (!isUriExists(request.uri, server, false))
         {
-            std::string response = buildResponse("Error: " + status_codes[404] + "\n", "", 404, false, "", request.keep_alive);
+            std::string response = buildResponse(buildErrorPage(404), ".html", 404, false, "", request.keep_alive);
             send(client_fd, response.c_str(), response.length(), 0);
             return request.keep_alive;            
         }
@@ -566,7 +590,7 @@ bool Server::serveClient(int client_fd, Server::Request request)
             Webserv::Location location = getLocation(request.uri, server);
             if (!isMethodAllowed("GET", location))
             {
-                std::string response = buildResponse("Error: " + status_codes[405] + "\n", "", 405, false, "", request.keep_alive);
+                std::string response = buildResponse(buildErrorPage(405), ".html", 405, false, "", request.keep_alive);
                 send(client_fd, response.c_str(), response.length(), 0);
                 return request.keep_alive;
             }
@@ -578,7 +602,7 @@ bool Server::serveClient(int client_fd, Server::Request request)
                     {
                         if (!isUriExists(location.redirection.second, server, true)) // hadi drnaha 3la hsab return location wach exists
                         {
-                            std::string response = buildResponse("Error: " + status_codes[404] + "\n", "", 404, false, "", request.keep_alive);
+                            std::string response = buildResponse(buildErrorPage(404), ".html", 404, false, "", request.keep_alive);
                             send(client_fd, response.c_str(), response.length(), 0);
                             return request.keep_alive;            
                         }
@@ -603,7 +627,7 @@ bool Server::serveClient(int client_fd, Server::Request request)
             std::string toSearch = location.root + request.uri;
             if (stat(toSearch.c_str(), &st) == -1)
             {
-                std::string response = buildResponse("Error: " + status_codes[404] + "\n", "", 404, false, "", request.keep_alive);
+                std::string response = buildResponse(buildErrorPage(404), ".html", 404, false, "", request.keep_alive);
                 send(client_fd, response.c_str(), response.length(), 0);
                 return request.keep_alive;
             }
@@ -615,7 +639,7 @@ bool Server::serveClient(int client_fd, Server::Request request)
                     {
                         if (!location.autoindex)
                         {
-                            std::string response = buildResponse("Error: " + status_codes[403] + "\n", "", 403, false, "", request.keep_alive);
+                            std::string response = buildResponse(buildErrorPage(403), ".html", 403, false, "", request.keep_alive);
                             send(client_fd, response.c_str(), response.length(), 0);
                             return request.keep_alive;
                         }
@@ -638,7 +662,7 @@ bool Server::serveClient(int client_fd, Server::Request request)
                         }
                         else
                         {
-                            std::string response = buildResponse("Error: " + status_codes[403] + "\n", "", 403, false, "", request.keep_alive);
+                            std::string response = buildResponse(buildErrorPage(403), ".html", 403, false, "", request.keep_alive);
                             send(client_fd, response.c_str(), response.length(), 0);
                             return request.keep_alive;
                         }
@@ -654,14 +678,14 @@ bool Server::serveClient(int client_fd, Server::Request request)
                     }
                     else
                     {
-                        std::string response = buildResponse("Error: " + status_codes[403] + "\n", "", 403, false, "", request.keep_alive);
+                        std::string response = buildResponse(buildErrorPage(403), ".html", 403, false, "", request.keep_alive);
                         send(client_fd, response.c_str(), response.length(), 0);
                         return request.keep_alive;
                     }
                 }
                 else
                 {
-                    std::string response = buildResponse("Error: " + status_codes[404] + "\n", "", 404, false, "", request.keep_alive);
+                    std::string response = buildResponse(buildErrorPage(404), ".html", 404, false, "", request.keep_alive);
                     send(client_fd, response.c_str(), response.length(), 0);
                     return request.keep_alive;
                 }
@@ -674,7 +698,7 @@ bool Server::serveClient(int client_fd, Server::Request request)
         struct stat st;
         if (!isUriExists(request.uri, server, false))
         {
-            std::string response = buildResponse("Error: " + status_codes[404] + "\n", "", 404, false, "", request.keep_alive);
+            std::string response = buildResponse(buildErrorPage(404), ".html", 404, false, "", request.keep_alive);
             send(client_fd, response.c_str(), response.length(), 0);
             return request.keep_alive;            
         }
@@ -683,14 +707,14 @@ bool Server::serveClient(int client_fd, Server::Request request)
             Webserv::Location location = getLocation(request.uri, server);
             if (!isMethodAllowed("DELETE", location))
             {
-                std::string response = buildResponse("Error: " + status_codes[405] + "\n", "", 405, false, "", request.keep_alive);
+                std::string response = buildResponse(buildErrorPage(405), ".html", 405, false, "", request.keep_alive);
                 send(client_fd, response.c_str(), response.length(), 0);
                 return request.keep_alive;
             }
             std::string filepath = location.root + request.uri;
             if (stat(filepath.c_str(), &st) == -1)
             {
-                std::string response = buildResponse("Error: " + status_codes[404] + "\n", "", 404, false, "", request.keep_alive);
+                std::string response = buildResponse(buildErrorPage(404), ".html", 404, false, "", request.keep_alive);
                 send(client_fd, response.c_str(), response.length(), 0);
                 return request.keep_alive;
             }
@@ -698,20 +722,20 @@ bool Server::serveClient(int client_fd, Server::Request request)
             {
                 if (S_ISDIR(st.st_mode))
                 {
-                    std::string response = buildResponse("Error: " + status_codes[403] + "\n", "", 403, false, "", request.keep_alive);
+                    std::string response = buildResponse(buildErrorPage(403), ".html", 403, false, "", request.keep_alive);
                     send(client_fd, response.c_str(), response.length(), 0);
                     return request.keep_alive;
                 }
                 std::string file_dire = filepath.substr(0, filepath.find_last_of('/'));
                 if (access(file_dire.c_str(), W_OK | X_OK) != 0)
                 {
-                    std::string response = buildResponse("Error: " + status_codes[403] + "\n", "", 403, false, "", request.keep_alive);
+                    std::string response = buildResponse(buildErrorPage(403), ".html", 403, false, "", request.keep_alive);
                     send(client_fd, response.c_str(), response.length(), 0);
                     return request.keep_alive;
                 }
                 if (unlink(filepath.c_str()) != 0)
                 {
-                    std::string response = buildResponse("Error: " + status_codes[403] + "\n", "", 403, false, "", request.keep_alive);
+                    std::string response = buildResponse(buildErrorPage(403), ".html", 403, false, "", request.keep_alive);
                     send(client_fd, response.c_str(), response.length(), 0);
                     return request.keep_alive;
                 }
@@ -729,7 +753,7 @@ bool Server::serveClient(int client_fd, Server::Request request)
 
         if (!isUriExists(request.uri, server, false))
         {
-            std::string response = buildResponse("Error: " + status_codes[404] + "\n", "", 404, false, "", request.keep_alive);
+            std::string response = buildResponse(buildErrorPage(404), ".html", 404, false, "", request.keep_alive);
             send(client_fd, response.c_str(), response.length(), 0);
             return request.keep_alive;
         }
@@ -739,7 +763,7 @@ bool Server::serveClient(int client_fd, Server::Request request)
             std::cout << "body: " << request.body << std::endl;
             if (!isMethodAllowed("POST", location))
             {
-                std::string response = buildResponse("Error: " + status_codes[405] + "\n", "", 405, false, "", request.keep_alive);
+                std::string response = buildResponse(buildErrorPage(405), ".html", 405, false, "", request.keep_alive);
                 send(client_fd, response.c_str(), response.length(), 0);
                 return request.keep_alive;
             }
