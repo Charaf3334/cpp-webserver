@@ -216,6 +216,7 @@ void Webserv::assignContentType(void)
     content_type[".mjs"] = "text/javascript";
     content_type[".mp3"] = "audio/mpeg";
     content_type[".mp4"] = "video/mp4";
+    content_type[".mkv"] = "video/x-matroska";
     content_type[".mpeg"] = "video/mpeg";
     content_type[".mpkg"] = "application/vnd.apple.installer+xml";
     content_type[".odp"] = "application/vnd.oasis.opendocument.presentation";

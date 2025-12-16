@@ -17,11 +17,18 @@ class Server : public Webserv
             bool keep_alive;
             std::string body;
         };
+        struct ClientState
+        {
+            std::string pending_response;
+            size_t bytes_sent;
+            bool keep_alive;
+        };
         static Server* instance;
         std::vector<int> socket_fds;
         std::vector<int> client_fds;
         std::map<int, Webserv::Server*> sockfd_to_server;
         std::map<int, Webserv::Server*> clientfd_to_server; // KEY=FD this is the map we will use to serve clients per servers
+        std::map<int, ClientState> client_states;
         bool shutdownFlag;
 
         bool setNonBlockingFD(const int fd) const;
@@ -49,6 +56,9 @@ class Server : public Webserv
         bool isMethodAllowed(std::string method, Webserv::Location location) const;
         void closeClient(int epoll_fd, int client_fd, bool inside_loop);
         std::string buildErrorPage(int code);
+        bool sendResponse(int client_fd, const std::string response, bool keep_alive);
+        bool continueSending(int client_fd);
+        void modifyEpollEvents(int epoll_fd, int client_fd, unsigned int events);
     public:
         Server(Webserv webserv);
         Server(const Server &theOtherObject);
