@@ -79,3 +79,11 @@ to do:
         Connection: close
 
         Error: Bad Request
+
+
+
+zakaria - cgi
+    1- use map lli fcontent type
+    2- check redirection in cgi
+    4- fixi ga3 env variables port user_addr etc
+    3- ghda nddi cgi

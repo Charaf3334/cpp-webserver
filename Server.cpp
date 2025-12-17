@@ -1,4 +1,5 @@
 #include "Server.hpp"
+#include "CGI.hpp"
 
 Server::Server(Webserv webserv) : Webserv(webserv)
 {
@@ -659,7 +660,15 @@ bool Server::serveClient(int client_fd, Server::Request request)
                 {
                     if (access(toSearch.c_str(), R_OK) == 0)
                     {
-                        std::string response = buildResponse(readFile(toSearch), getExtension(toSearch), 200, false, "", request.keep_alive);
+                        std::string ext = getExtension(toSearch);
+                        std::string response;
+                        if (getLocation(request.uri, server).hasCgi && (ext == ".py" || ext == ".php")) // cgi block
+                        {
+                            std::cout << "cgi block must be here\n";
+                            CGI cgi(this, request, toSearch, ext);
+                            response = cgi.execute(request, toSearch, ext);
+                        } else //regular files
+                            response = buildResponse(readFile(toSearch), getExtension(toSearch), 200, false, "", request.keep_alive);
                         return sendResponse(client_fd, response, request.keep_alive);
                     }
                     else
@@ -739,6 +748,42 @@ bool Server::serveClient(int client_fd, Server::Request request)
             if (!isMethodAllowed("POST", location))
             {
                 std::string response = buildResponse(buildErrorPage(405), ".html", 405, false, "", request.keep_alive);
+                return sendResponse(client_fd, response, request.keep_alive);
+            }
+            
+            // Check client_max_body_size for POST requests
+            std::map<std::string, std::string>::iterator cl_it = request.headers.find("content-length");
+            if (cl_it != request.headers.end())
+            {
+                size_t content_length = atol(cl_it->second.c_str());
+                if (content_length > client_max_body_size)
+                {
+                    std::string response = buildResponse(buildErrorPage(413), ".html", 413, false, "", request.keep_alive);
+                    return sendResponse(client_fd, response, request.keep_alive);
+                }
+            }
+
+            std::string toSearch = location.root + request.uri;
+            
+            // Handle CGI scripts for POST
+            if (stat(toSearch.c_str(), &st) != -1 && S_ISREG(st.st_mode))
+            {
+                std::string ext = getExtension(toSearch);
+                if (location.hasCgi && (ext == ".py" || ext == ".php"))
+                {
+                    CGI cgi(this, request, toSearch, ext);
+                    std::string response = cgi.execute(request, toSearch, ext);
+                    return sendResponse(client_fd, response, request.keep_alive);
+                }
+                else
+                {
+                    std::string response = buildResponse(buildErrorPage(501), ".html", 501, false, "", request.keep_alive);
+                    return sendResponse(client_fd, response, request.keep_alive);
+                }
+            }
+            else
+            {
+                std::string response = buildResponse(buildErrorPage(404), ".html", 404, false, "", request.keep_alive);
                 return sendResponse(client_fd, response, request.keep_alive);
             }
         }

@@ -7,7 +7,7 @@
 
 class Server : public Webserv
 {
-    private:
+    public:
         struct Request
         {
             std::string method;
@@ -17,6 +17,8 @@ class Server : public Webserv
             bool keep_alive;
             std::string body;
         };
+
+    private:
         struct ClientState
         {
             std::string pending_response;
@@ -39,7 +41,6 @@ class Server : public Webserv
         bool parseRequest(int client_fd, std::string request_string, Server::Request &request);
         std::string readFile(const std::string file_path) const;
         std::string getExtension(std::string file_path);
-        std::string buildResponse(std::string file_content, std::string extension, int status, bool inRedirection, std::string newPath, bool keep_alive);
         std::vector<std::string> getheadersLines(const std::string req, bool &flag, int &error_status, std::string &body);
         bool parse_lines(std::vector<std::string> lines, Server::Request &request, int &error_status);
         bool parse_headers(std::string &str, Server::Request &request, int &error_status);
@@ -55,11 +56,14 @@ class Server : public Webserv
         std::string getFilethatExists(Webserv::Location location) const;
         bool isMethodAllowed(std::string method, Webserv::Location location) const;
         void closeClient(int epoll_fd, int client_fd, bool inside_loop);
-        std::string buildErrorPage(int code);
         bool sendResponse(int client_fd, const std::string response, bool keep_alive);
         bool continueSending(int client_fd);
         void modifyEpollEvents(int epoll_fd, int client_fd, unsigned int events);
+
     public:
+        std::string buildResponse(std::string file_content, std::string extension, int status, bool inRedirection, std::string newPath, bool keep_alive);
+        std::string buildErrorPage(int code);
+        
         Server(Webserv webserv);
         Server(const Server &theOtherObject);
         Server& operator=(const Server &theOtherObject);
