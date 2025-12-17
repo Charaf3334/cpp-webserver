@@ -124,7 +124,7 @@ std::string Server::readRequest(int client_fd)
     while (true)
     {
         bytes = read(client_fd, temp_buffer, sizeof(temp_buffer));
-        if (bytes <= 0) // connection closed or error
+        if (bytes <= 0)
         {
             if (bytes == 0)
             {
@@ -142,7 +142,8 @@ std::string Server::readRequest(int client_fd)
                 client_ref.isParsed = true;
                 client_ref.headers_end = pos;
                 std::string header = client_ref.request.substr(0, pos);
-                size_t idx = header.find("Content-Length:");
+                header = str_tolower(header);
+                size_t idx = header.find("content-length:");
                 if (idx != std::string::npos && idx < pos) // ensure it's in headers
                 {
                     size_t line_end = client_ref.request.find("\r\n", idx);
@@ -150,9 +151,6 @@ std::string Server::readRequest(int client_fd)
                     {
                         client_ref.content_lenght_present = true;
                         std::string value = client_ref.request.substr(idx + 15, line_end - (idx + 15));
-                        size_t first = value.find_first_not_of(" \t");
-                        if (first != std::string::npos)
-                            value = value.substr(first);
                         client_ref.content_len = std::atoll(value.c_str());
                     }
                 }
