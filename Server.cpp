@@ -114,16 +114,23 @@ std::string Server::readRequest(int client_fd)
     client_read &client_ref = read_states[client_fd];
     char temp_buffer[4096];
     ssize_t bytes;
-    client_ref.isParsed = false;
-    client_ref.content_lenght_present = false;
 
+    if (client_ref.request.empty())
+    {
+        client_ref.is_request_full = false;
+        client_ref.isParsed = false;
+        client_ref.content_lenght_present = false;
+    }
     while (true)
     {
         bytes = read(client_fd, temp_buffer, sizeof(temp_buffer));
         if (bytes <= 0) // connection closed or error
         {
             if (bytes == 0)
+            {
                 std::cerr << "User Disconnected" << std::endl;
+                client_ref.is_request_full = true;
+            }
             break;
         }
         client_ref.request.append(temp_buffer, bytes);
@@ -149,6 +156,11 @@ std::string Server::readRequest(int client_fd)
                         client_ref.content_len = std::atoll(value.c_str());
                     }
                 }
+            }
+            else
+            {
+                client_ref.is_request_full = true;
+                break;
             }
         }
         if (client_ref.isParsed)
