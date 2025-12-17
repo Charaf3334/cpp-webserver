@@ -111,11 +111,11 @@ std::string Server::buildResponse(std::string file_content, std::string extensio
 
 std::string Server::readRequest(int client_fd)
 {
-    std::string request;
-    char temp_buffer[1024];
+    client_read &client_ref = read_states[client_fd];
+    char temp_buffer[4096];
     ssize_t bytes;
-    size_t content_length = 0;
-    bool isParsed = false;
+    client_ref.isParsed = false;
+    client_ref.content_lenght_present = false;
 
     while (true)
     {
@@ -126,40 +126,49 @@ std::string Server::readRequest(int client_fd)
                 std::cerr << "User Disconnected" << std::endl;
             break;
         }
-        request.append(temp_buffer, bytes);
-        if (!isParsed)
+        client_ref.request.append(temp_buffer, bytes);
+        if (!client_ref.isParsed)
         {
-            size_t pos = request.find("\r\n\r\n");
+            size_t pos = client_ref.request.find("\r\n\r\n");
             if (pos != std::string::npos)
             {
-                isParsed = true;
-                size_t idx = request.find("Content-Length:");
+                client_ref.isParsed = true;
+                client_ref.headers_end = pos;
+                std::string header = client_ref.request.substr(0, pos);
+                size_t idx = header.find("Content-Length:");
                 if (idx != std::string::npos && idx < pos) // ensure it's in headers
                 {
-                    size_t line_end = request.find("\r\n", idx);
+                    size_t line_end = client_ref.request.find("\r\n", idx);
                     if (line_end != std::string::npos)
                     {
-                        std::string len_str = request.substr(idx + 15, line_end - (idx + 15));
-                        size_t first = len_str.find_first_not_of(" \t");
+                        client_ref.content_lenght_present = true;
+                        std::string value = client_ref.request.substr(idx + 15, line_end - (idx + 15));
+                        size_t first = value.find_first_not_of(" \t");
                         if (first != std::string::npos)
-                            len_str = len_str.substr(first);
-                        content_length = std::atoll(len_str.c_str());
+                            value = value.substr(first);
+                        client_ref.content_len = std::atoll(value.c_str());
                     }
                 }
-                else // no content-length header or no body
-                    break;
             }
         }
-        // check if full body received
-        if (isParsed)
+        if (client_ref.isParsed)
         {
-            size_t header_end = request.find("\r\n\r\n");
-            size_t total_expected = header_end + 4 + content_length;
-            if (request.size() >= total_expected)
+            if (!client_ref.content_lenght_present)
+            {
+                client_ref.is_request_full = true;
                 break;
+            }
+            size_t total_expected = client_ref.headers_end + 4 + client_ref.content_len;
+            if (client_ref.request.size() >= total_expected)
+            {
+                client_ref.is_request_full = true;
+                break;
+            }
         }
+        if (bytes < static_cast<ssize_t>(sizeof(temp_buffer)))
+            break;
     }
-    return request;
+    return client_ref.request;
 }
 
 std::vector<std::string> Server::getheadersLines(const std::string req, bool &flag, int &error_status, std::string &body)
@@ -795,6 +804,7 @@ void Server::closeClient(int epoll_fd, int client_fd, bool inside_loop)
 {
     if (inside_loop)
         this->client_fds.erase(std::remove(client_fds.begin(), client_fds.end(), client_fd), client_fds.end());
+    read_states.erase(client_fd); 
     epoll_ctl(epoll_fd, EPOLL_CTL_DEL, client_fd, NULL);
     close(client_fd);
 }
@@ -939,12 +949,20 @@ void Server::initialize(void)
             else if (events[i].events & EPOLLIN)
             {
                 std::string request_string = readRequest(fd);
+                if (read_states.find(fd) != read_states.end())
+                {
+                    client_read &client_read_state = read_states[fd];
+                    if (!client_read_state.is_request_full)
+                        continue;
+                    request_string = client_read_state.request;
+                    read_states.erase(fd);
+                }
                 if (request_string.empty()) // client disconnected
                 { 
                     closeClient(epoll_fd, fd, true);
                     continue;
                 }
-                // std::cout << request_string << std::endl;
+                std::cout << request_string << std::endl;
                 Server::Request request;
                 if (!parseRequest(fd, request_string, request))
                 {

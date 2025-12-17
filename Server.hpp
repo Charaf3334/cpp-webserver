@@ -17,7 +17,6 @@ class Server : public Webserv
             bool keep_alive;
             std::string body;
         };
-
     private:
         struct ClientState
         {
@@ -25,12 +24,22 @@ class Server : public Webserv
             size_t bytes_sent;
             bool keep_alive;
         };
+        struct client_read
+        {
+            std::string request;
+            size_t headers_end;
+            size_t content_len;
+            bool is_request_full;
+            bool isParsed;
+            bool content_lenght_present;
+        };
         static Server* instance;
         std::vector<int> socket_fds;
         std::vector<int> client_fds;
         std::map<int, Webserv::Server*> sockfd_to_server;
         std::map<int, Webserv::Server*> clientfd_to_server; // KEY=FD this is the map we will use to serve clients per servers
         std::map<int, ClientState> client_states;
+        std::map<int, client_read> read_states;
         bool shutdownFlag;
 
         bool setNonBlockingFD(const int fd) const;
