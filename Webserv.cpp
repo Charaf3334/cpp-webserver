@@ -760,6 +760,8 @@ bool Webserv::checkPath(const std::string path) const
     }
     if (path.find("//") != std::string::npos)
         return false;
+    if (path.find("..") != std::string::npos || path.find(".") != std::string::npos)
+        return false;
     if (path.size() > 1 && path[path.size() - 1] == '/' && path[path.size() - 2] == '/')
         return false;
     return true;

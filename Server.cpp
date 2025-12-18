@@ -196,6 +196,12 @@ std::string Server::readRequest(int client_fd)
                 break;
             }
             size_t total_expected = client_ref.headers_end + 4 + client_ref.content_len;
+            std::string body = client_ref.request.substr(client_ref.headers_end + 4);
+            if (body.size() < client_ref.content_len)
+            {
+                client_ref.isParsed = false;
+                break;
+            }
             if (client_ref.request.size() >= total_expected)
             {
                 client_ref.is_request_full = true;
@@ -543,11 +549,14 @@ bool Server::isMethodAllowed(std::string method, Webserv::Location location) con
     return false;
 }
 
-std::string dirlisntening_gen(std::string request_uri, std::string path)
+std::string dirlisntening_gen(std::string request_uri, std::string path, int &code)
 {
     DIR *directory = opendir(path.c_str());
     if (!directory)
+    {
+        code = 403;
         return "<html><body><h1>Forbidden</h1></body></html>";
+    }
     std::string html_text;
     html_text += "<html>\n<head><title>Index of " + request_uri + "</title></head>\n<body>\n<h1>Index of " + request_uri + "</h1>\n<ul>\n";
     struct dirent *entry;
@@ -567,6 +576,7 @@ std::string dirlisntening_gen(std::string request_uri, std::string path)
     }
     html_text += "</ul>\n</body>\n</html>\n";
     closedir(directory);
+    code = 200;
     return html_text;
 }
 
@@ -637,6 +647,12 @@ bool Server::serveClient(int client_fd, Server::Request request)
                 std::string response = buildResponse(buildErrorPage(405), ".html", 405, false, "", request.keep_alive);
                 return sendResponse(client_fd, response, request.keep_alive);
             }
+            size_t pos = request.uri.find("/../");
+            if (pos != std::string::npos && pos == 0) 
+            {
+                std::string response = buildResponse(buildErrorPage(403), ".html", 403, false, "", request.keep_alive);
+                return sendResponse(client_fd, response, request.keep_alive);
+            }
             if (location.isRedirection) 
             {
                 if (!location.redirectionIsText) 
@@ -682,8 +698,9 @@ bool Server::serveClient(int client_fd, Server::Request request)
                         }
                         else
                         {
-                            std::string body = dirlisntening_gen(request.uri, location.root + request.uri);
-                            std::string response = buildResponse(body, ".html", 200, false, "", request.keep_alive);
+                            int code;
+                            std::string body = dirlisntening_gen(request.uri, location.root + request.uri, code);
+                            std::string response = buildResponse(body, ".html", code, false, "", request.keep_alive);
                             return sendResponse(client_fd, response, request.keep_alive);
                         }
                     }
@@ -748,6 +765,12 @@ bool Server::serveClient(int client_fd, Server::Request request)
                 std::string response = buildResponse(buildErrorPage(405), ".html", 405, false, "", request.keep_alive);
                 return sendResponse(client_fd, response, request.keep_alive);
             }
+            size_t pos = request.uri.find("/../");
+            if (pos != std::string::npos && pos == 0) 
+            {
+                std::string response = buildResponse(buildErrorPage(403), ".html", 403, false, "", request.keep_alive);
+                return sendResponse(client_fd, response, request.keep_alive);
+            }
             std::string filepath = location.root + request.uri;
             if (stat(filepath.c_str(), &st) == -1)
             {
@@ -796,8 +819,13 @@ bool Server::serveClient(int client_fd, Server::Request request)
                 std::string response = buildResponse(buildErrorPage(405), ".html", 405, false, "", request.keep_alive);
                 return sendResponse(client_fd, response, request.keep_alive);
             }
-            
-            // Check client_max_body_size for POST requests
+            size_t pos = request.uri.find("/../");
+            if (pos != std::string::npos && pos == 0) 
+            {
+                std::string response = buildResponse(buildErrorPage(403), ".html", 403, false, "", request.keep_alive);
+                return sendResponse(client_fd, response, request.keep_alive);
+            }
+
             std::map<std::string, std::string>::iterator cl_it = request.headers.find("content-length");
             if (cl_it != request.headers.end())
             {
@@ -1000,7 +1028,7 @@ void Server::initialize(void)
                     closeClient(epoll_fd, fd, true);
                     continue;
                 }
-                std::cout << request_string << std::endl;
+                // std::cout << request_string << std::endl;
                 Server::Request request;
                 if (!parseRequest(fd, request_string, request))
                 {
