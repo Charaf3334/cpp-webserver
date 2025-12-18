@@ -24,6 +24,7 @@
 #include <unistd.h>
 #include <signal.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 
 class Webserv 
 {

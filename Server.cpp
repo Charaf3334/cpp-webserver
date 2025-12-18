@@ -109,6 +109,32 @@ std::string Server::buildResponse(std::string file_content, std::string extensio
     return response;
 }
 
+void Server::checkTimeoutClients(int epoll_fd)
+{
+    struct timeval currentTime;
+    gettimeofday(&currentTime, NULL);
+    std::map<int, client_read>::iterator it = read_states.begin();
+    std::vector<int> fdsToClose;
+
+    for (; it != read_states.end(); it++)
+    {
+        int client_fd = it->first;
+        client_read &client_ref = it->second;
+        if (client_ref.has_start_time && !client_ref.is_request_full && !client_ref.isParsed)
+        {
+            long passed_time = ((currentTime.tv_sec - client_ref.start_time.tv_sec) * 1000) + ((currentTime.tv_usec - client_ref.start_time.tv_usec) / 1000);
+            if (passed_time > 3000)
+            {
+                std::string response = buildResponse(buildErrorPage(400), ".html", 400, false, "", false);
+                sendResponse(client_fd, response, false);
+                fdsToClose.push_back(client_fd);
+            }
+        }
+    }
+    for (size_t i = 0; i < fdsToClose.size(); i++)
+        closeClient(epoll_fd, fdsToClose[i], true);
+}
+
 std::string Server::readRequest(int client_fd)
 {
     client_read &client_ref = read_states[client_fd];
@@ -120,6 +146,12 @@ std::string Server::readRequest(int client_fd)
         client_ref.is_request_full = false;
         client_ref.isParsed = false;
         client_ref.content_lenght_present = false;
+        client_ref.has_start_time = false;
+    }
+    if (!client_ref.has_start_time || !client_ref.isParsed)
+    {
+        gettimeofday(&client_ref.start_time, NULL);
+        client_ref.has_start_time = true;
     }
     while (true)
     {
@@ -154,11 +186,6 @@ std::string Server::readRequest(int client_fd)
                         client_ref.content_len = std::atoll(value.c_str());
                     }
                 }
-            }
-            else
-            {
-                client_ref.is_request_full = true;
-                break;
             }
         }
         if (client_ref.isParsed)
@@ -913,7 +940,8 @@ void Server::initialize(void)
     epoll_event events[MAX_EVENTS];
     while (!shutdownFlag && countingFailedSockets != servers.size())
     {
-        int n = epoll_wait(epoll_fd, events, MAX_EVENTS, -1);
+        int n = epoll_wait(epoll_fd, events, MAX_EVENTS, 1000);
+        checkTimeoutClients(epoll_fd);
         for (int i = 0; i < n; i++)
         {
             int fd = events[i].data.fd;

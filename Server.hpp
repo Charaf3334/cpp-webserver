@@ -32,6 +32,8 @@ class Server : public Webserv
             bool is_request_full;
             bool isParsed;
             bool content_lenght_present;
+            struct timeval start_time;
+            bool has_start_time;
         };
         static Server* instance;
         std::vector<int> socket_fds;
@@ -42,6 +44,7 @@ class Server : public Webserv
         std::map<int, client_read> read_states;
         bool shutdownFlag;
 
+        void checkTimeoutClients(int epoll_fd);
         bool setNonBlockingFD(const int fd) const;
         sockaddr_in infos(const Webserv::Server server) const;
         void closeSockets(void);
