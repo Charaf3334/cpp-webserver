@@ -89,25 +89,39 @@ std::string Server::tostring(size_t num) const
     return strnum.str();
 }
 
-std::string Server::buildResponse(std::string file_content, std::string extension, int status, bool inRedirection, std::string newPath, bool keep_alive)
+
+std::string Server::buildResponse(std::string body, std::string extension, int status, bool inRedirection, std::string newPath, bool keep_alive, const std::vector<std::pair<std::string, std::string> > &extra_headers)
 {
     std::string CRLF = "\r\n";
-    std::string start_line = "HTTP/1.0 " + tostring(status) + " " + status_codes[status] + CRLF;
-    std::string type;
-    if (this->content_type.find(extension) == this->content_type.end())
-        type = "text/plain";
-    else
-        type = this->content_type[extension];
+    std::string response;
 
-    std::string content_type = "Content-Type: " + type + CRLF;
-    std::string location;
+    response += "HTTP/1.0 " + tostring(status) + " " + status_codes[status] + CRLF;
+
+    std::string type = "text/plain";
+    if (content_type.count(extension))
+        type = content_type[extension];
+
+    response += "Content-Type: " + type + CRLF;
+
     if (inRedirection)
-        location = "Location: " + newPath + CRLF;
-    std::string content_length = "Content-Length: " + tostring(file_content.length()) + CRLF;
-    std::string connection = std::string("Connection: ") + (keep_alive ? "keep-alive" : "close") + CRLF + CRLF; // two CRLF mean ending the headers , still need to check what does this mean and when to make it keep-alive vs close
-    std::string response = start_line + content_type + location + content_length + connection + file_content;
+        response += "Location: " + newPath + CRLF;
+
+    // set cookies
+    for (size_t i = 0; i < extra_headers.size(); i++) {
+        const std::string &key = extra_headers[i].first;
+        if (key == "content-type" || key == "content-length" || key == "location")
+            continue;
+        response += key + ": " + extra_headers[i].second + CRLF;
+    }
+
+    response += "Content-Length: " + tostring(body.size()) + CRLF;
+    response += "Connection: " + std::string(keep_alive ? "keep-alive" : "close") + CRLF;
+    response += CRLF;
+    response += body;
+
     return response;
 }
+
 
 void Server::checkTimeoutClients(int epoll_fd)
 {
@@ -468,6 +482,18 @@ bool Server::parseRequest(int client_fd, std::string request_string, Server::Req
     request.keep_alive = false;
     if (found != request.headers.end() && found->second == "keep-alive")
         request.keep_alive = true;
+    
+    if (client_addresses.find(client_fd) != client_addresses.end()) { //zakaria
+        sockaddr_in addr = client_addresses[client_fd];
+        char ip_str[INET_ADDRSTRLEN];
+        inet_ntop(AF_INET, &addr.sin_addr, ip_str, sizeof(ip_str));
+        request.remote_addr = ip_str;
+        request.remote_port = ntohs(addr.sin_port);
+    } else {
+        request.remote_addr = "127.0.0.1";
+        request.remote_port = 0;
+    }
+
     return true;
 }
 
@@ -938,6 +964,7 @@ bool Server::serveClient(int client_fd, Server::Request request)
 
 void Server::closeClient(int epoll_fd, int client_fd, bool inside_loop)
 {
+    client_addresses.erase(client_fd);
     if (inside_loop)
         this->client_fds.erase(std::remove(client_fds.begin(), client_fds.end(), client_fd), client_fds.end());
     read_states.erase(client_fd); 
@@ -1060,7 +1087,12 @@ void Server::initialize(void)
                 int client_fd = accept(fd, reinterpret_cast<sockaddr*>(&client_addr), &client_len);
                 if (client_fd != -1)
                 {
-                    // std::cout << "New client connected ..." << std::endl;
+                    client_addresses[client_fd] = client_addr; // zakaria
+                    char client_ip[INET_ADDRSTRLEN];
+                    inet_ntop(AF_INET, &client_addr.sin_addr, client_ip, sizeof(client_ip));
+                    int client_port = ntohs(client_addr.sin_port);
+                    std::cout << "New client connected from: " << client_ip << ":" << client_port << std::endl;
+
                     setNonBlockingFD(client_fd);
                     this->clientfd_to_server[client_fd] = this->sockfd_to_server[fd];
                     this->client_fds.push_back(client_fd);

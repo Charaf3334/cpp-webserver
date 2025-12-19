@@ -83,7 +83,11 @@ to do:
 
 
 zakaria - cgi
-    1- use map lli fcontent type
-    2- check redirection in cgi
-    4- fixi ga3 env variables port user_addr etc
-    3- ghda nddi cgi
+    4- old promo: QUERY_STRING
+    6- Add CGI pipes to your epoll set - Handle them asynchronously with other connections
+    7- i should build a default working cgi files in cgi files final
+
+    to charaf:
+    zedt addr and port frequest
+    added extra headers to build response so i can set the cookies,
+    if epoll is fixed for both get and post, you must explain it to me because i need to implement it in cgi too (time out user, time out script)

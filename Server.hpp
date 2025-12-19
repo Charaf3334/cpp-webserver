@@ -16,6 +16,8 @@ class Server : public Webserv
             std::map<std::string, std::string> headers;
             bool keep_alive;
             std::string body;
+            std::string remote_addr; // zakaria
+            int remote_port; // zakaria
         };
     private:
         struct ClientState
@@ -35,6 +37,7 @@ class Server : public Webserv
             struct timeval start_time;
             bool has_start_time;
         };
+        std::map<int, sockaddr_in> client_addresses; // zakaria
         static Server* instance;
         std::vector<int> socket_fds;
         std::vector<int> client_fds;
@@ -73,7 +76,8 @@ class Server : public Webserv
         void modifyEpollEvents(int epoll_fd, int client_fd, unsigned int events);
 
     public:
-        std::string buildResponse(std::string file_content, std::string extension, int status, bool inRedirection, std::string newPath, bool keep_alive);
+        std::string buildResponse(std::string body, std::string extension, int status, bool inRedirection, std::string newPath, bool keep_alive, const std::vector<std::pair<std::string, std::string> > &extra_headers = std::vector<std::pair<std::string, std::string> >());
+
         std::string buildErrorPage(int code);
         
         Server(Webserv webserv);

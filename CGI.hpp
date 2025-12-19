@@ -27,19 +27,17 @@ private:
     std::vector<std::string> env_vars;
     char **env_cgi;
     char **argv;
+    std::map<std::string, std::string> ext_map;
 
-    // Pipes
-    int pipe_in[2];  // Parent -> Child (stdin)
-    int pipe_out[2]; // Child -> Parent (stdout)
-    int pipe_err[2]; // Child -> Parent (stderr)
+    int pipe_in[2];  // parent -> child
+    int pipe_out[2]; // child -> parent
+    int pipe_err[2]; // child -> parent
 
     pid_t pid;
     std::string cgi_output;
     std::string error_output;
 
-    // Helper methods
     std::string trim(std::string &s);
-    void determineInterpreter();
     void setupPipes();
     void setupEnvironment();
     void setupAuthEnvironment();
@@ -49,14 +47,15 @@ private:
     void setupPathEnvironment();
     void convertEnvVarsToCharPtr();
     void setupArguments();
-    void changeToScriptDirectory();
-    void executeChildProcess();
-    void executeParentProcess();
+    int  changeToScriptDirectory();
+    void childProcess();
+    void parentProcess();
     void cleanup();
     std::string parseCGIOutput(std::string &cgi_output);
-    std::map<std::string, std::string> parseCGIHeaders(std::string &headers);
+    std::vector<std::pair<std::string, std::string> > parseCGIHeaders(std::string &headers);
     void readFromPipes();
     void handlePipeErrors();
+    void assignExtension(void);
 
 public:
     CGI(Server *srv, Server::Request &req, std::string &abs_path, std::string &extension);
