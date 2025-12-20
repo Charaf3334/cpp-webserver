@@ -63,16 +63,6 @@ void Server::handlingSigint(int sig)
     }
 }
 
-std::string Server::readFile(const std::string file_path) const
-{
-    std::ifstream file(file_path.c_str());
-    std::stringstream content;
-
-    content << file.rdbuf();
-    file.close();
-    return content.str();
-}
-
 std::string Server::getExtension(std::string file_path)
 {
     size_t dot = file_path.rfind('.');
@@ -94,31 +84,26 @@ std::string Server::buildResponse(std::string body, std::string extension, int s
 {
     std::string CRLF = "\r\n";
     std::string response;
-
     response += "HTTP/1.0 " + tostring(status) + " " + status_codes[status] + CRLF;
-
     std::string type = "text/plain";
     if (content_type.count(extension))
         type = content_type[extension];
-
     response += "Content-Type: " + type + CRLF;
-
     if (inRedirection)
         response += "Location: " + newPath + CRLF;
 
     // set cookies
-    for (size_t i = 0; i < extra_headers.size(); i++) {
+    for (size_t i = 0; i < extra_headers.size(); i++) 
+    {
         const std::string &key = extra_headers[i].first;
         if (key == "content-type" || key == "content-length" || key == "location")
             continue;
         response += key + ": " + extra_headers[i].second + CRLF;
     }
-
     response += "Content-Length: " + tostring(body.size()) + CRLF;
     response += "Connection: " + std::string(keep_alive ? "keep-alive" : "close") + CRLF;
     response += CRLF;
     response += body;
-
     return response;
 }
 
@@ -811,8 +796,7 @@ bool Server::serveClient(int client_fd, Server::Request request)
                         std::string index_file = getFilethatExists(location);
                         if (!index_file.empty())
                         {
-                            std::string response = buildResponse(readFile(index_file), getExtension(index_file), 200, false, "", request.keep_alive);
-                            return sendResponse(client_fd, response, request.keep_alive);
+                            return sendFileResponse(client_fd, index_file, getExtension(index_file), 200, request.keep_alive);
                         }
                         else
                         {
@@ -832,8 +816,11 @@ bool Server::serveClient(int client_fd, Server::Request request)
                             std::cout << "cgi block must be here\n";
                             CGI cgi(this, request, toSearch, ext);
                             response = cgi.execute(request, toSearch);
-                        } else //regular files
-                            response = buildResponse(readFile(toSearch), getExtension(toSearch), 200, false, "", request.keep_alive);
+                        } 
+                        else
+                        {
+                            return sendFileResponse(client_fd, toSearch, ext, 200, request.keep_alive);
+                        } 
                         return sendResponse(client_fd, response, request.keep_alive);
                     }
                     else
@@ -989,6 +976,51 @@ void Server::modifyEpollEvents(int epoll_fd, int client_fd, unsigned int events)
     epoll_ctl(epoll_fd, EPOLL_CTL_MOD, client_fd, &ev);
 }
 
+bool Server::sendFileResponse(int client_fd, const std::string file_path, const std::string extension, int status, bool keep_alive, const std::vector<std::pair<std::string, std::string> > &extra_headers)
+{
+    struct stat st;
+
+    if (stat(file_path.c_str(), &st) == -1)
+        return false;
+    int file_fd = open(file_path.c_str(), O_RDONLY);
+    if (file_fd == -1)
+        return false;
+    
+    std::string CRLF = "\r\n";
+    std::string response_headers;
+    response_headers += "HTTP/1.0 " + tostring(status) + " " + status_codes[status] + CRLF;
+    std::string type = "text/plain";
+    if (content_type.count(extension))
+        type = content_type[extension];
+    response_headers += "Content-Type: " + type + CRLF;
+    for (size_t i = 0; i < extra_headers.size(); i++)
+    {
+        const std::string key = extra_headers[i].first;
+        if (key == "content-type" || key == "content-length")
+            continue;
+        response_headers += key + ": " + extra_headers[i].second + CRLF;
+    }
+    response_headers += "Content-Length: " + tostring(st.st_size) + CRLF;
+    response_headers += "Connection: " + std::string(keep_alive ? "keep-alive" : "close") + CRLF;
+    response_headers += CRLF;
+
+    ClientState &state = client_states[client_fd];
+    state.is_streaming = true;
+    state.file_fd = file_fd;
+    state.file_offset = 0;
+    state.file_size = st.st_size;
+    state.keep_alive = keep_alive;
+    state.buffer_offset = 0;
+    state.buffer_len = 0;
+    state.response_headers = response_headers;
+    state.headers_sent = 0;
+    state.headers_complete = false;
+    state.pending_response.clear();
+    state.bytes_sent = 0;
+    this->fileFdstoClose.push_back(file_fd);
+    return continueSending(client_fd);
+}
+
 bool Server::sendResponse(int client_fd, const std::string response, bool keep_alive)
 {
     ClientState &state = client_states[client_fd];
@@ -1002,14 +1034,67 @@ bool Server::sendResponse(int client_fd, const std::string response, bool keep_a
 bool Server::continueSending(int client_fd)
 {
     ClientState &state = client_states[client_fd];
-    
+
+    if (state.is_streaming)
+    {
+        if (!state.headers_complete)
+        {
+            ssize_t sent = send(client_fd, state.response_headers.c_str() + state.headers_sent, state.response_headers.length() - state.headers_sent, 0);
+            if (sent == -1)
+                return false;
+            if (sent == 0)
+            {
+                close(state.file_fd);
+                client_states.erase(client_fd);
+                return false;
+            }
+            state.headers_sent += sent;
+            if (state.headers_sent >= state.response_headers.length())
+            {
+                state.headers_complete = true;
+                state.response_headers.clear();
+            }
+            return false;
+        }
+        if (state.buffer_offset >= state.buffer_len)
+        {
+            if (state.file_offset >= state.file_size)
+            {
+                close(state.file_fd);
+                bool keep_alive = state.keep_alive;
+                client_states.erase(client_fd);
+                return keep_alive;
+            }
+            ssize_t bytes_read = read(state.file_fd, state.buffer, sizeof(state.buffer));
+            if (bytes_read <= 0)
+            {
+                close(state.file_fd);
+                client_states.erase(client_fd);
+                return false;
+            }
+            state.buffer_offset = 0;
+            state.buffer_len = bytes_read;
+        }
+        ssize_t sent = send(client_fd, state.buffer + state.buffer_offset, state.buffer_len - state.buffer_offset, 0);
+        if (sent == -1)
+            return false;
+        if (sent == 0)
+        {
+            close(state.file_fd);
+            client_states.erase(client_fd);
+            return false;
+        }
+        state.buffer_offset += sent;
+        state.file_offset += sent;
+        return false;
+    }
     while (state.bytes_sent < state.pending_response.length())
     {
         ssize_t sent = send(client_fd, state.pending_response.c_str() + state.bytes_sent, state.pending_response.length() - state.bytes_sent, 0);
-        if (sent == -1) // cant send now (buffer full), need to wait for EPOLLOUT
-            return false; 
+        if (sent == -1)
+            return false;
         if (sent == 0)
-            return false;   
+            return false;
         state.bytes_sent += sent;
     }
     bool keep_alive = state.keep_alive;
@@ -1160,5 +1245,7 @@ void Server::initialize(void)
     this->closeSockets();
     for (size_t i = 0; i < this->client_fds.size(); i++)
         closeClient(epoll_fd, client_fds[i], false);
+    for (size_t i = 0; i < this->fileFdstoClose.size(); i++)
+        close(this->fileFdstoClose[i]);
     close(epoll_fd);
 }

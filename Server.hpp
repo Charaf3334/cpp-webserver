@@ -25,6 +25,16 @@ class Server : public Webserv
             std::string pending_response;
             size_t bytes_sent;
             bool keep_alive;
+            bool is_streaming;
+            int file_fd;
+            size_t file_offset;
+            size_t file_size;
+            char buffer[8192];
+            size_t buffer_offset;
+            size_t buffer_len;
+            std::string response_headers;
+            size_t headers_sent;
+            bool headers_complete;
         };
         struct client_read
         {
@@ -46,6 +56,7 @@ class Server : public Webserv
         std::map<int, ClientState> client_states;
         std::map<int, client_read> read_states;
         bool shutdownFlag;
+        std::vector<int> fileFdstoClose;
 
         void checkTimeoutClients(int epoll_fd);
         bool setNonBlockingFD(const int fd) const;
@@ -54,7 +65,6 @@ class Server : public Webserv
         static void handlingSigint(int sig);
         std::string readRequest(int client_fd);
         bool parseRequest(int client_fd, std::string request_string, Server::Request &request);
-        std::string readFile(const std::string file_path) const;
         std::string getExtension(std::string file_path);
         std::vector<std::string> getheadersLines(const std::string req, bool &flag, int &error_status, std::string &body);
         bool parse_lines(std::vector<std::string> lines, Server::Request &request, int &error_status);
@@ -74,10 +84,10 @@ class Server : public Webserv
         bool sendResponse(int client_fd, const std::string response, bool keep_alive);
         bool continueSending(int client_fd);
         void modifyEpollEvents(int epoll_fd, int client_fd, unsigned int events);
+        bool sendFileResponse(int client_fd, const std::string file_path, const std::string extension, int status, bool keep_alive, const std::vector<std::pair<std::string, std::string> > &extra_headers = std::vector<std::pair<std::string, std::string> >());
 
     public:
         std::string buildResponse(std::string body, std::string extension, int status, bool inRedirection, std::string newPath, bool keep_alive, const std::vector<std::pair<std::string, std::string> > &extra_headers = std::vector<std::pair<std::string, std::string> >());
-
         std::string buildErrorPage(int code);
         
         Server(Webserv webserv);
