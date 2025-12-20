@@ -63,6 +63,7 @@ class Server : public Webserv
         std::vector<int> fileFdstoClose;
 
         void checkTimeoutClients(int epoll_fd);
+        std::string currentDate(void) const;
         bool setNonBlockingFD(const int fd) const;
         sockaddr_in infos(const Webserv::Server server) const;
         void closeSockets(void);

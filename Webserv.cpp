@@ -126,21 +126,21 @@ std::string* Webserv::split(const std::string line)
     return parts;
 }
 
-
 std::vector<std::string> Webserv::semicolonBracketsFix(const std::vector<std::string> input)
 {
     std::vector<std::string> result;
-    for (std::vector<std::string>::const_iterator it = input.begin(); it != input.end(); ++it) 
+
+    for (size_t i = 0; i < input.size(); i++)
     {
-        const std::string s = *it;
+        const std::string s = input[i];
         std::string temp;
-        for (std::string::size_type i = 0; i < s.size(); ++i) 
+        for (size_t j = 0; j < s.size(); j++)
         {
-            char c = s[i];
+            char c = s[j];
 
             if (c == ';' || c == '{' || c == '}')
             {
-                if (!temp.empty()) 
+                if (!temp.empty())
                 {
                     result.push_back(temp);
                     temp.clear();

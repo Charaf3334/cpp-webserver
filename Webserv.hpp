@@ -1,8 +1,6 @@
 #ifndef WEBSERV_HPP
 #define WEBSERV_HPP
 
-
-#include <dirent.h>
 #include <iostream>
 #include <string>
 #include <fstream>
@@ -18,6 +16,7 @@
 #include <netdb.h>
 #include <cstring>
 #include <fcntl.h>
+#include <dirent.h>
 #include <sys/epoll.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -25,6 +24,7 @@
 #include <signal.h>
 #include <sys/stat.h>
 #include <sys/time.h>
+#include <ctime>
 
 class Webserv 
 {
@@ -52,7 +52,6 @@ class Webserv
             std::vector<Location> locations; 
             std::string root;
         };
-
         std::ifstream config_file;
         std::vector<std::string> tokens;
         std::vector<Webserv::Server> servers;
@@ -66,7 +65,6 @@ class Webserv
         Server parseServer(size_t &i);
         void parseLocation(size_t &i, Webserv::Server &server, int &depth, bool &sawLocation);
         void mergePaths(void);
-
         std::string* split(const std::string line);
         size_t countParts(const std::string line) const;
         bool isFileEmpty(void);

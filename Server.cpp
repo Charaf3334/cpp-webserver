@@ -79,6 +79,15 @@ std::string Server::tostring(size_t num) const
     return strnum.str();
 }
 
+std::string Server::currentDate(void) const
+{
+    char buffer[64];
+
+    std::time_t now = std::time(NULL);
+    std::tm *gmt = std::gmtime(&now);
+    std::strftime(buffer, sizeof(buffer), "%a, %d %b %Y %H:%M:%S GMT", gmt);
+    return std::string(buffer);
+}
 
 std::string Server::buildResponse(std::string body, std::string extension, int status, bool inRedirection, std::string newPath, bool keep_alive, const std::vector<std::pair<std::string, std::string> > &extra_headers)
 {
@@ -88,6 +97,7 @@ std::string Server::buildResponse(std::string body, std::string extension, int s
     std::string type = "text/plain";
     if (content_type.count(extension))
         type = content_type[extension];
+    response += "Date: " + currentDate() + CRLF;
     response += "Content-Type: " + type + CRLF;
     if (inRedirection)
         response += "Location: " + newPath + CRLF;
@@ -1059,6 +1069,7 @@ bool Server::sendFileResponse(int client_fd, const std::string file_path, const 
     int file_fd = open(file_path.c_str(), O_RDONLY);
     if (file_fd == -1)
         return false;
+    this->fileFdstoClose.push_back(file_fd);
     
     std::string CRLF = "\r\n";
     std::string response_headers;
@@ -1066,6 +1077,7 @@ bool Server::sendFileResponse(int client_fd, const std::string file_path, const 
     std::string type = "text/plain";
     if (content_type.count(extension))
         type = content_type[extension];
+    response_headers += "Date: " + currentDate() + CRLF;
     response_headers += "Content-Type: " + type + CRLF;
     for (size_t i = 0; i < extra_headers.size(); i++)
     {
@@ -1091,7 +1103,6 @@ bool Server::sendFileResponse(int client_fd, const std::string file_path, const 
     state.headers_complete = false;
     state.pending_response.clear();
     state.bytes_sent = 0;
-    this->fileFdstoClose.push_back(file_fd);
     return continueSending(client_fd);
 }
 
