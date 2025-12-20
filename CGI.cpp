@@ -48,11 +48,10 @@ static bool findHeader(
 }
 
 
-std::string CGI::execute(Server::Request &req, std::string &abs_path, std::string &extension)
+std::string CGI::execute(Server::Request &req, std::string &abs_path)
 {
     request = req;
     script_path = abs_path;
-    extension = extension;
 
     try
     {

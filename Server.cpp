@@ -831,7 +831,7 @@ bool Server::serveClient(int client_fd, Server::Request request)
                         {
                             std::cout << "cgi block must be here\n";
                             CGI cgi(this, request, toSearch, ext);
-                            response = cgi.execute(request, toSearch, ext);
+                            response = cgi.execute(request, toSearch);
                         } else //regular files
                             response = buildResponse(readFile(toSearch), getExtension(toSearch), 200, false, "", request.keep_alive);
                         return sendResponse(client_fd, response, request.keep_alive);
@@ -949,7 +949,7 @@ bool Server::serveClient(int client_fd, Server::Request request)
                 if (location.hasCgi && (ext == ".py" || ext == ".php"))
                 {
                     CGI cgi(this, request, toSearch, ext);
-                    std::string response = cgi.execute(request, toSearch, ext);
+                    std::string response = cgi.execute(request, toSearch);
                     return sendResponse(client_fd, response, request.keep_alive);
                 }
                 else

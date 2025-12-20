@@ -61,7 +61,7 @@ public:
     CGI(Server *srv, Server::Request &req, std::string &abs_path, std::string &extension);
     ~CGI();
 
-    std::string execute(Server::Request &req, std::string &abs_path, std::string &extension);
+    std::string execute(Server::Request &req, std::string &abs_path);
 };
 
 #endif
