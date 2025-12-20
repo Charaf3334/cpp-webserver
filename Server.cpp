@@ -351,7 +351,7 @@ bool Server::check_allowedfirst(std::string &first)
 	return true;
 }
 
-bool Server::parse_headers(std::string &line, Server::Request &request, int &error_status)
+bool Server::parse_headers(std::string &line, std::map<std::string, std::string> &map, int &error_status)
 {
     if (line.empty())
     {
@@ -391,7 +391,7 @@ bool Server::parse_headers(std::string &line, Server::Request &request, int &err
         return false;
     }
     std::string second = line.substr(pos);
-    request.headers[first] = second;
+    map[first] = second;
 	return true;
 }
 
@@ -424,7 +424,7 @@ bool Server::parse_lines(std::vector<std::string> lines, Server::Request &reques
         }
 		else if (i > 0)
 		{
-            if (!parse_headers(lines[i], request, error_status))
+            if (!parse_headers(lines[i], request.headers, error_status))
 				return false;
 		}
 	}
@@ -714,6 +714,25 @@ std::string simplifyPath(std::string path) {
 	return (correct_path);
 }
 
+std::vector<std::string> get_bodyheaders_Lines(const std::string req)
+{
+    std::string sub_req;
+	std::vector<std::string> lines;
+	size_t pos = req.find("\r\n\r\n");
+	sub_req = req.substr(0, pos);
+	int start = 0;
+	for (size_t j = 0; j < sub_req.size(); j++)
+	{
+		if ((sub_req[j] == '\r' && sub_req[j + 1] == '\n') || j + 1 == sub_req.size())
+		{
+			lines.push_back(sub_req.substr(start, (j + 1 == sub_req.size()) ? j - start + 1 : j - start));
+			j++;
+			start = j + 1;
+		}
+	}
+	return lines;
+}
+
 bool Server::serveClient(int client_fd, Server::Request request)
 {
     Webserv::Server server;
@@ -892,7 +911,6 @@ bool Server::serveClient(int client_fd, Server::Request request)
     {
         server = *clientfd_to_server[client_fd];
         struct stat st;
-        (void)st;
 
         if (!isUriExists(request.uri, server, false))
         {
@@ -946,7 +964,63 @@ bool Server::serveClient(int client_fd, Server::Request request)
                 }
             }
             if (S_ISDIR(st.st_mode)) {
-                // real post begins
+                if (request.headers.count("content-type")) {
+                    size_t pos = request.headers["content-type"].find("multipart/form-data;");
+                    if (pos != std::string::npos && pos == 0) {
+                        size_t pos2 =request.headers["content-type"].find("boundary=");
+                        if (pos2 != std::string::npos) {
+                            request.body_boundary = "--" + request.headers["content-type"].substr(pos2 + 9);
+                            if (request.body.find(request.body_boundary + "--") == std::string::npos) {
+                                std::string response = buildResponse(buildErrorPage(400), ".html", 400, false, "", request.keep_alive);
+                                return sendResponse(client_fd, response, request.keep_alive);
+                            }
+                        } else {
+                            std::string response = buildResponse(buildErrorPage(400), ".html", 400, false, "", request.keep_alive);
+                            return sendResponse(client_fd, response, request.keep_alive);
+                        }
+                        size_t boundry_start = 0;
+                        size_t boundry_pos = request.body.find("\r\n");
+                        int no_use;
+                        if (pos != std::string::npos) {
+                            if (request.body_boundary == request.body.substr(boundry_start, boundry_pos)) {
+                                size_t body_headers_pos = request.body.find("\r\n\r\n");
+                                if (body_headers_pos != std::string::npos) {
+                                    std::vector<std::string> body_headers_array = get_bodyheaders_Lines(request.body.substr(boundry_pos + 2, body_headers_pos));
+                                    for (size_t i = 0; i < body_headers_array.size(); i++) {
+                                        if (!parse_headers(body_headers_array[i], request.body_headers, no_use)) {
+                                            std::string response = buildResponse(buildErrorPage(400), ".html", 400, false, "", request.keep_alive);
+                                            return sendResponse(client_fd, response, request.keep_alive);
+                                        }
+                                    }
+                                    if (request.body_headers.count("content-disposition")) {
+                                        size_t file_pos = request.body_headers["content-disposition"].find("filename=");
+                                        if (file_pos != std::string::npos) {
+                                            request.bodyfile_name = request.body_headers["content-disposition"].substr(file_pos + 10, request.body_headers["content-disposition"].size() - file_pos - 11);
+                                        } else {
+                                            // filename not present
+                                        }
+                                    } else {
+                                        // content-disposition not present
+                                    }
+                                } else {
+                                    std::string response = buildResponse(buildErrorPage(400), ".html", 400, false, "", request.keep_alive);
+                                    return sendResponse(client_fd, response, request.keep_alive);
+                                }
+                                size_t start = request.body.find("\r\n\r\n") + 4;
+                                request.real_body = request.body.substr(start, request.body.find(request.body_boundary, start) - start - 2);
+                            } else {
+                                std::string response = buildResponse(buildErrorPage(400), ".html", 400, false, "", request.keep_alive);
+                                return sendResponse(client_fd, response, request.keep_alive);
+                            }
+                        }
+                    } else {
+                        // handle simple POST
+                    }
+                }
+                else {
+                    std::string response = buildResponse(buildErrorPage(400), ".html", 400, false, "", request.keep_alive);
+                    return sendResponse(client_fd, response, request.keep_alive);
+                }
             }
             else
             {

@@ -16,6 +16,10 @@ class Server : public Webserv
             std::map<std::string, std::string> headers;
             bool keep_alive;
             std::string body;
+            std::map<std::string, std::string> body_headers;
+            std::string real_body;
+            std::string body_boundary;
+            std::string bodyfile_name;
             std::string remote_addr; // zakaria
             int remote_port; // zakaria
         };
@@ -68,7 +72,7 @@ class Server : public Webserv
         std::string getExtension(std::string file_path);
         std::vector<std::string> getheadersLines(const std::string req, bool &flag, int &error_status, std::string &body);
         bool parse_lines(std::vector<std::string> lines, Server::Request &request, int &error_status);
-        bool parse_headers(std::string &str, Server::Request &request, int &error_status);
+        bool parse_headers(std::string &line, std::map<std::string, std::string> &map, int &error_status);
         std::string str_tolower(std::string str);
         bool check_allowedfirst(std::string &first);
         bool parse_methode(std::string *words, int &error_status, Server::Request &request);
