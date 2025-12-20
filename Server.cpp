@@ -671,14 +671,14 @@ size_t countPath(const std::string line)
     }
     return count;
 }
-std::string* split_path(const std::string line, size_t *count)
+std::string* split_path(const std::string line, size_t &count)
 {
-    *count = countPath(line);
-    std::string* parts = new std::string[*count];
+    count = countPath(line);
+    std::string* parts = new std::string[count];
     size_t i = 0;
     size_t idx = 0;
     size_t size = line.size();
-    while (i < size && idx < *count)
+    while (i < size && idx < count)
     {
         while (i < size && line[i] == '/')
             i++;
@@ -698,7 +698,7 @@ std::string* split_path(const std::string line, size_t *count)
 }
 std::string simplifyPath(std::string path) {
 	size_t count = 0;
-	std::string *words = split_path(path, &count);
+	std::string *words = split_path(path, count);
 	std::string correct_path;
 	std::stack <std::string> s;
 	for (size_t i = 0; i < count; i++)
@@ -716,11 +716,16 @@ std::string simplifyPath(std::string path) {
             s.push(words[i]);
 		}
 	}
-	while (!s.empty())
-	{
-		correct_path.insert(0, "/" + s.top());
-		s.pop();
-	}
+    if (s.empty())
+        return "/";
+    else {
+        while (!s.empty())
+        {
+            correct_path.insert(0, "/" + s.top());
+            s.pop();
+        }
+    }
+    delete[] words;
 	return (correct_path);
 }
 
@@ -862,13 +867,12 @@ bool Server::serveClient(int client_fd, Server::Request request)
                 std::string response = buildResponse(buildErrorPage(405), ".html", 405, false, "", request.keep_alive);
                 return sendResponse(client_fd, response, request.keep_alive);
             }
-            size_t pos = request.uri.find("/../");
-            if (pos != std::string::npos && pos == 0) 
-            {
+            std::string filepath = location.root + request.uri;
+            size_t pos = simplifyPath(filepath).find(location.root);
+            if (pos == std::string::npos || pos != 0) {
                 std::string response = buildResponse(buildErrorPage(403), ".html", 403, false, "", request.keep_alive);
                 return sendResponse(client_fd, response, request.keep_alive);
             }
-            std::string filepath = location.root + request.uri;
             if (stat(filepath.c_str(), &st) == -1)
             {
                 std::string response = buildResponse(buildErrorPage(404), ".html", 404, false, "", request.keep_alive);
@@ -916,12 +920,6 @@ bool Server::serveClient(int client_fd, Server::Request request)
                 std::string response = buildResponse(buildErrorPage(405), ".html", 405, false, "", request.keep_alive);
                 return sendResponse(client_fd, response, request.keep_alive);
             }
-            size_t pos = request.uri.find("/../");
-            if (pos != std::string::npos && pos == 0) 
-            {
-                std::string response = buildResponse(buildErrorPage(403), ".html", 403, false, "", request.keep_alive);
-                return sendResponse(client_fd, response, request.keep_alive);
-            }
 
             std::map<std::string, std::string>::iterator cl_it = request.headers.find("content-length");
             if (cl_it != request.headers.end())
@@ -935,9 +933,17 @@ bool Server::serveClient(int client_fd, Server::Request request)
             }
 
             std::string toSearch = location.root + request.uri;
-            
+            size_t pos = simplifyPath(toSearch).find(location.root);
+            if (pos == std::string::npos || pos != 0) {
+                std::string response = buildResponse(buildErrorPage(403), ".html", 403, false, "", request.keep_alive);
+                return sendResponse(client_fd, response, request.keep_alive);
+            }
             // Handle CGI scripts for POST
-            if (stat(toSearch.c_str(), &st) != -1 && S_ISREG(st.st_mode))
+            if (stat(toSearch.c_str(), &st) == -1) {
+                std::string response = buildResponse(buildErrorPage(404), ".html", 404, false, "", request.keep_alive);
+                return sendResponse(client_fd, response, request.keep_alive);
+            }
+            if (S_ISREG(st.st_mode))
             {
                 std::string ext = getExtension(toSearch);
                 if (location.hasCgi && (ext == ".py" || ext == ".php"))
@@ -951,6 +957,9 @@ bool Server::serveClient(int client_fd, Server::Request request)
                     std::string response = buildResponse(buildErrorPage(501), ".html", 501, false, "", request.keep_alive);
                     return sendResponse(client_fd, response, request.keep_alive);
                 }
+            }
+            if (S_ISDIR(st.st_mode)) {
+                // real post begins
             }
             else
             {
