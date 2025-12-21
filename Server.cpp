@@ -147,7 +147,7 @@ void Server::checkTimeoutClients(int epoll_fd)
 std::string Server::readRequest(int client_fd)
 {
     client_read &client_ref = read_states[client_fd];
-    char temp_buffer[4096];
+    char temp_buffer[65536];
     ssize_t bytes;
 
     if (client_ref.request.empty())
@@ -987,72 +987,73 @@ bool Server::serveClient(int client_fd, Server::Request request)
                             std::string response = buildResponse(buildErrorPage(400), ".html", 400, false, "", request.keep_alive);
                             return sendResponse(client_fd, response, request.keep_alive);
                         }
-                        // bool end_boudary = false;
                         size_t boundry_start = 0;
-                        size_t boundry_pos = request.body.find(request.body_boundary + "\r\n");
-                        int no_use;
-                        if (boundry_pos == std::string::npos) {
-                            std::string response = buildResponse(buildErrorPage(400), ".html", 400, false, "", request.keep_alive);
-                            return sendResponse(client_fd, response, request.keep_alive);
-                        }
-                        if (request.body_boundary != request.body.substr(boundry_start, request.body_boundary.size())) {
-                            std::string response = buildResponse(buildErrorPage(400), ".html", 400, false, "", request.keep_alive);
-                            return sendResponse(client_fd, response, request.keep_alive);
-                        }
-                        size_t body_headers_pos = request.body.find("\r\n\r\n");
-                        if (body_headers_pos == std::string::npos) {
-                            std::string response = buildResponse(buildErrorPage(400), ".html", 400, false, "", request.keep_alive);
-                            return sendResponse(client_fd, response, request.keep_alive);
-                        }
-                        std::vector<std::string> body_headers_array = get_bodyheaders_Lines(request.body.substr(boundry_pos + request.body_boundary.size() + 2, body_headers_pos));
-                        for (size_t i = 0; i < body_headers_array.size(); i++) {
-                            if (!parse_headers(body_headers_array[i], request.body_headers, no_use)) {
+                        while (true) {
+                            size_t boundry_pos = request.body.find(request.body_boundary + "\r\n", boundry_start);
+                            int no_use;
+                            if (boundry_pos == std::string::npos) {
+                                if (request.body.find(request.body_boundary + "--" + "\r\n", boundry_start) != std::string::npos)
+                                    return request.keep_alive;
                                 std::string response = buildResponse(buildErrorPage(400), ".html", 400, false, "", request.keep_alive);
                                 return sendResponse(client_fd, response, request.keep_alive);
                             }
-                        }
-                        if (request.body_headers.count("content-disposition")) {
-                            size_t file_pos = request.body_headers["content-disposition"].find("filename=");
-                            if (file_pos != std::string::npos) {
-                                request.bodyfile_name = request.body_headers["content-disposition"].substr(file_pos + 10, request.body_headers["content-disposition"].size() - file_pos - 11);
-                            } else {
-                                // filename not present
+                            if (request.body_boundary != request.body.substr(boundry_start, request.body_boundary.size())) {
+                                std::string response = buildResponse(buildErrorPage(400), ".html", 400, false, "", request.keep_alive);
+                                return sendResponse(client_fd, response, request.keep_alive);
                             }
-                        } else {
-                            // content-disposition not present
-                        }
-                        size_t start = request.body.find("\r\n\r\n") + 4;
-                        request.real_body = request.body.substr(start, request.body.find(request.body_boundary, start) - start - 2);
-                        
-                        if (stat(location.upload_dir.c_str(), &st) == -1) {
-                            std::string response = buildResponse(buildErrorPage(404), ".html", 404, false, "", request.keep_alive);
-                            return sendResponse(client_fd, response, request.keep_alive);
-                        }
-                        if (access(location.upload_dir.c_str(), W_OK) == -1) {
-                            std::string response = buildResponse(buildErrorPage(403), ".html", 403, false, "", request.keep_alive);
-                            return sendResponse(client_fd, response, request.keep_alive);
-                        }
-                        if (S_ISDIR(st.st_mode)) {
-                            std::string file_path = location.upload_dir + "/" + request.bodyfile_name;
-                            std::cout << file_path <<std::endl;
-                            int fd = open(file_path.c_str(), O_CREAT | O_WRONLY | O_TRUNC, 0644);
-                            if (fd == -1) {
-                                perror("open");
+                            size_t body_headers_pos = request.body.find("\r\n\r\n", boundry_start);
+                            if (body_headers_pos == std::string::npos) {
+                                std::string response = buildResponse(buildErrorPage(400), ".html", 400, false, "", request.keep_alive);
+                                return sendResponse(client_fd, response, request.keep_alive);
+                            }
+                            std::vector<std::string> body_headers_array = get_bodyheaders_Lines(request.body.substr(boundry_pos + request.body_boundary.size() + 2, body_headers_pos));
+                            for (size_t i = 0; i < body_headers_array.size(); i++) {
+                                if (!parse_headers(body_headers_array[i], request.body_headers, no_use)) {
+                                    std::string response = buildResponse(buildErrorPage(400), ".html", 400, false, "", request.keep_alive);
+                                    return sendResponse(client_fd, response, request.keep_alive);
+                                }
+                            }
+                            if (request.body_headers.count("content-disposition")) {
+                                size_t file_pos = request.body_headers["content-disposition"].find("filename=");
+                                if (file_pos != std::string::npos) {
+                                    request.bodyfile_name = request.body_headers["content-disposition"].substr(file_pos + 10, request.body_headers["content-disposition"].size() - file_pos - 11);
+                                } else {
+                                    // filename not present
+                                }
+                            } else {
+                                // content-disposition not present
+                            }
+                            size_t start = request.body.find("\r\n\r\n", boundry_start) + 4;
+                            size_t end = request.body.find(request.body_boundary, start);
+                            request.real_body = request.body.substr(start, end - start - 2);
+                            if (stat(location.upload_dir.c_str(), &st) == -1) {
+                                std::string response = buildResponse(buildErrorPage(404), ".html", 404, false, "", request.keep_alive);
+                                return sendResponse(client_fd, response, request.keep_alive);
+                            }
+                            if (access(location.upload_dir.c_str(), W_OK) == -1) {
                                 std::string response = buildResponse(buildErrorPage(403), ".html", 403, false, "", request.keep_alive);
                                 return sendResponse(client_fd, response, request.keep_alive);
                             }
-                            if (write(fd, request.real_body.c_str(), request.real_body.size()) == -1) {
-                                std::string response = buildResponse(buildErrorPage(500), ".html", 500, false, "", request.keep_alive);
+                            if (S_ISDIR(st.st_mode)) {
+                                std::string file_path = location.upload_dir + "/" + request.bodyfile_name;
+                                int fd = open(file_path.c_str(), O_CREAT | O_WRONLY | O_TRUNC, 0644);
+                                if (fd == -1) {
+                                    std::string response = buildResponse(buildErrorPage(403), ".html", 403, false, "", request.keep_alive);
+                                    return sendResponse(client_fd, response, request.keep_alive);
+                                }
+                                if (write(fd, request.real_body.c_str(), request.real_body.size()) == -1) {
+                                    std::string response = buildResponse(buildErrorPage(500), ".html", 500, false, "", request.keep_alive);
+                                    close(fd);
+                                    return sendResponse(client_fd, response, request.keep_alive);
+                                }
+                                std::string response = buildResponse(buildErrorPage(201), ".html", 201, false, "", request.keep_alive);
                                 close(fd);
+                                sendResponse(client_fd, response, request.keep_alive);
+                            } else {
+                                std::string response = buildResponse(buildErrorPage(403), ".html", 403, false, "", request.keep_alive);
                                 return sendResponse(client_fd, response, request.keep_alive);
                             }
-                            std::string response = buildResponse(buildErrorPage(201), ".html", 201, false, "", request.keep_alive);
-                            close(fd);
-                            return sendResponse(client_fd, response, request.keep_alive);
-                        }
-                        else {
-                            std::string response = buildResponse(buildErrorPage(403), ".html", 403, false, "", request.keep_alive);
-                            return sendResponse(client_fd, response, request.keep_alive);
+                            boundry_start = end;
                         }
                     } else {
                         // handle simple POST
