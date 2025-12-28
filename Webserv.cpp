@@ -171,6 +171,7 @@ void Webserv::assignStatusCodes(void)
     status_codes[403] = "Forbidden";
     status_codes[404] = "Not Found";
     status_codes[405] = "Method Not Allowed";
+    status_codes[411] = "length required";
     status_codes[413] = "Payload Too Large";
     status_codes[500] = "Internal Server Error";
     status_codes[501] = "Not Implemented";
@@ -416,7 +417,7 @@ void Webserv::read_file(void)
                     i++;
                     if (tokens[i] == ";")
                         throw std::runtime_error("Error: Empty root directive inside http block.");
-                    if (!checkRoot(tokens[i]))
+                    if (!checkPath(tokens[i]))
                         throw std::runtime_error("Error: Invalid path for root directive inside http block.");
                     http_root = tokens[i];
                     i++;
@@ -504,7 +505,7 @@ bool Webserv::checkMaxBodySize(const std::string value)
 {
     if (value.empty())
         return false;
-    for (size_t i = 0; i < value.size() - 1; i++)
+    for (size_t i = 0; i < value.size(); i++)
     {
         if (!isdigit(value[i]))
             return false;
@@ -825,7 +826,7 @@ Webserv::Server Webserv::parseServer(size_t &i)
                 throw std::runtime_error("Error: Expected a path after root directive.");
             if (tokens[i + 1] != ";")
                 throw std::runtime_error("Error: Expected ';' after root.");
-            if (!checkRoot(tokens[i]))
+            if (!checkPath(tokens[i]))
                 throw std::runtime_error("Error: Invalid path for root directive.");
             server.root = tokens[i];
             i++;
@@ -1013,7 +1014,7 @@ void Webserv::parseLocation(size_t &i, Webserv::Server &server, int &depth, bool
                 throw std::runtime_error("Error: Invalid value for cgi directive. Expected 'on' or 'off'.");
             i++;
             if (tokens[i] != ";")
-                throw std::runtime_error("Error: Expected ';' after cgi file.");
+                throw std::runtime_error("Error: Expected ';' after cgi directive.");
         }
         else if (tokens[i] != "root" && tokens[i] != "index" && tokens[i] != "allow_methods" && tokens[i] != "autoindex" && tokens[i] != ";")
             throw std::runtime_error("Error: Invalid directive '" + tokens[i] + "' inside location block.");

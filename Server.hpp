@@ -10,16 +10,19 @@ class Server : public Webserv
     public:
         struct Request
         {
+            bool keep_alive;
+            bool is_uri_dir;
+            bool take_boundry_check_upload_dir;
+            bool body_headers_done;
             std::string method;
             std::string uri;
             std::string http_version;
-            std::map<std::string, std::string> headers;
-            bool keep_alive;
             std::string body;
-            std::map<std::string, std::string> body_headers;
-            std::string real_body;
             std::string body_boundary;
             std::string bodyfile_name;
+            std::map<std::string, std::string> headers;
+            std::map<std::string, std::string> body_headers;
+            Webserv::Location location;
             std::string remote_addr; // zakaria
             int remote_port; // zakaria
         };
@@ -42,14 +45,28 @@ class Server : public Webserv
         };
         struct client_read
         {
-            std::string request;
-            size_t headers_end;
-            size_t content_len;
             bool is_request_full;
             bool isParsed;
             bool content_lenght_present;
-            struct timeval start_time;
             bool has_start_time;
+            bool should_ignore;
+            bool just_parsed;
+            bool is_post;
+            bool boundary_found;
+            bool just_took_headers;
+            int temporary_file_fd;
+            int file_fd;
+            ssize_t bytes;
+            size_t total_bytes_written;
+            size_t content_len;
+            size_t first_time;
+            std::string headers;
+            std::string temporary_body;
+            std::string body_buffer; 
+            std::string to_write;
+            char buffer[61440];
+            struct timeval start_time;
+            Request request;
         };
         std::map<int, sockaddr_in> client_addresses; // zakaria
         static Server* instance;
@@ -62,18 +79,22 @@ class Server : public Webserv
         bool shutdownFlag;
         std::vector<int> fileFdstoClose;
 
+        std::vector<std::string> get_bodyheaders_Lines(const std::string req);
+        std::string simplifyPath(std::string path);
         void checkTimeoutClients(int epoll_fd);
         std::string currentDate(void) const;
         bool setNonBlockingFD(const int fd) const;
         sockaddr_in infos(const Webserv::Server server) const;
         void closeSockets(void);
         static void handlingSigint(int sig);
-        std::string readRequest(int client_fd);
+        std::string readRequest(int epoll_fd, int client_fd);
+        std::string _trim(std::string str) const;
+        bool isContentLengthValid(std::string value);
         bool parseRequest(int client_fd, std::string request_string, Server::Request &request);
         std::string getExtension(std::string file_path);
         std::vector<std::string> getheadersLines(const std::string req, bool &flag, int &error_status, std::string &body);
         bool parse_lines(std::vector<std::string> lines, Server::Request &request, int &error_status);
-        bool parse_headers(std::string &line, std::map<std::string, std::string> &map, int &error_status);
+        bool parse_headers(std::string &line, std::map<std::string, std::string> &map, int &error_status, int option, const std::string boundary);
         std::string str_tolower(std::string str);
         bool check_allowedfirst(std::string &first);
         bool parse_methode(std::string *words, int &error_status, Server::Request &request);
