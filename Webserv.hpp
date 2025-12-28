@@ -28,7 +28,7 @@
 
 class Webserv 
 {
-    protected:
+    public:
         struct Location
         {
             std::string path;
@@ -45,6 +45,7 @@ class Webserv
             bool hasCgi;
             std::map<size_t, std::string> error_pages; // each location error pages
         };
+    protected:
         struct Server
         {
             std::string ip_address;

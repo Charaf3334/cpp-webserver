@@ -2,4 +2,4 @@
 # test.py - Python CGI test script
 
 while(1):
-    pass
+    print("A")

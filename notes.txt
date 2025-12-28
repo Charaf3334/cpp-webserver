@@ -83,8 +83,11 @@ to do:
 
 
 zakaria - cgi
-    4- old promo: QUERY_STRING
-    6- Add CGI pipes to your epoll set - Handle them asynchronously with other connections
+    2- query params
+    exit status dyal cgi for 500 server error
+    timeout even if output exist
+    4- cgi execute empty file 500
+
     7- i should build a default working cgi files in cgi files final
 
     to charaf:

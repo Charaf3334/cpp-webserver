@@ -11,10 +11,9 @@ Server::Server(Webserv webserv) : Webserv(webserv)
 
 Server::Server(const Server &theOtherObject) : Webserv(theOtherObject)
 {
-   
 }
 
-Server& Server::operator=(const Server &theOtherObject)
+Server &Server::operator=(const Server &theOtherObject)
 {
     if (this != &theOtherObject)
         static_cast<void>(theOtherObject);
@@ -23,7 +22,6 @@ Server& Server::operator=(const Server &theOtherObject)
 
 Server::~Server()
 {
-
 }
 
 bool Server::setNonBlockingFD(const int fd) const
@@ -103,7 +101,7 @@ std::string Server::buildResponse(std::string body, std::string extension, int s
         response += "Location: " + newPath + CRLF;
 
     // set cookies
-    for (size_t i = 0; i < extra_headers.size(); i++) 
+    for (size_t i = 0; i < extra_headers.size(); i++)
     {
         const std::string &key = extra_headers[i].first;
         if (key == "content-type" || key == "content-length" || key == "location")
@@ -116,7 +114,6 @@ std::string Server::buildResponse(std::string body, std::string extension, int s
     response += body;
     return response;
 }
-
 
 std::string Server::_trim(std::string str) const
 {
@@ -149,13 +146,12 @@ bool Server::isContentLengthValid(std::string value)
     return true;
 }
 
-
 std::string Server::readRequest(int epoll_fd, int client_fd)
 {
     client_read &client = read_states[client_fd];
     std::string CRLF = "\r\n\r\n";
     client.just_parsed = false;
-    
+
     if (!client.has_start_time)
     {
         client.total_bytes_written = 0;
@@ -173,6 +169,7 @@ std::string Server::readRequest(int epoll_fd, int client_fd)
         client.temporary_body = "";
         client.boundary_found = false;
         client.just_took_headers = false;
+        client.keep_alive = false;
     }
     if (!client.has_start_time || client.first_time > 0)
     {
@@ -235,7 +232,7 @@ std::string Server::readRequest(int epoll_fd, int client_fd)
                     client.should_ignore = true;
                     return "";
                 }
-                
+
                 Webserv::Server server = *clientfd_to_server[client_fd];
                 struct stat st;
                 if (!isUriExists(client.request.uri, server, false))
@@ -244,6 +241,7 @@ std::string Server::readRequest(int epoll_fd, int client_fd)
                     sendResponse(client_fd, response, client.request.keep_alive);
                     client.is_request_full = true;
                     client.should_ignore = true;
+                    client.keep_alive = client.request.keep_alive;
                     return "";
                 }
                 else
@@ -254,10 +252,11 @@ std::string Server::readRequest(int epoll_fd, int client_fd)
                         std::string response = buildResponse(buildErrorPage(405), ".html", 405, false, "", client.request.keep_alive);
                         sendResponse(client_fd, response, client.request.keep_alive);
                         client.is_request_full = true;
+                        client.keep_alive = client.request.keep_alive;
                         client.should_ignore = true;
                         return "";
                     }
-                
+
                     std::map<std::string, std::string>::iterator cl_it = client.request.headers.find("content-length");
                     if (cl_it != client.request.headers.end())
                     {
@@ -267,30 +266,64 @@ std::string Server::readRequest(int epoll_fd, int client_fd)
                             std::string response = buildResponse(buildErrorPage(413), ".html", 413, false, "", client.request.keep_alive);
                             sendResponse(client_fd, response, client.request.keep_alive);
                             client.is_request_full = true;
+                            client.keep_alive = client.request.keep_alive;
                             client.should_ignore = true;
                             return "";
                         }
                     }
-                    
+
                     std::string toSearch = client.request.location.root + client.request.uri;
                     size_t pos = simplifyPath(toSearch).find(client.request.location.root);
-                    if (pos == std::string::npos || pos != 0) {
+                    if (pos == std::string::npos || pos != 0)
+                    {
                         std::string response = buildResponse(buildErrorPage(403), ".html", 403, false, "", client.request.keep_alive);
                         sendResponse(client_fd, response, client.request.keep_alive);
                         client.is_request_full = true;
                         client.should_ignore = true;
+                        client.keep_alive = client.request.keep_alive;
                         return "";
                     }
                     // Handle CGI scripts for POST
-                    if (stat(toSearch.c_str(), &st) == -1) {
+                    if (stat(toSearch.c_str(), &st) == -1)
+                    {
                         std::string response = buildResponse(buildErrorPage(404), ".html", 404, false, "", client.request.keep_alive);
                         sendResponse(client_fd, response, client.request.keep_alive);
                         client.is_request_full = true;
                         client.should_ignore = true;
+                        client.keep_alive = client.request.keep_alive;
                         return "";
                     }
-                    // is regular added here
-                    if (S_ISDIR(st.st_mode))
+                    // is regular added here zakaria
+                    if (S_ISREG(st.st_mode))
+                    {
+                        std::string ext = getExtension(toSearch);
+                        if (getLocation(client.request.uri, server).hasCgi && (ext == ".py" || ext == ".php"))
+                        {
+                            // non blocking cgi
+                            if (!setupCGI(client.request, toSearch, ext, client_fd))
+                            {
+                                std::string response = buildResponse(buildErrorPage(500), ".html", 500, false, "", client.request.keep_alive);
+                                sendResponse(client_fd, response, client.request.keep_alive);
+                                client.is_request_full = true;
+                                client.should_ignore = true;
+                                client.keep_alive = client.request.keep_alive;
+                                return "";
+                            }
+                            client.keep_alive = client.request.keep_alive;
+                            return "";
+                        }
+                        else
+                        {
+                            std::string response = buildResponse(buildErrorPage(501), ".html", 501, false, "", client.request.keep_alive);
+                            sendResponse(client_fd, response, client.request.keep_alive);
+                            client.is_request_full = true;
+                            client.should_ignore = true;
+                            client.keep_alive = client.request.keep_alive;
+                            return "";
+                        }
+                    }
+                    /////////////////////////////////
+                    else if (S_ISDIR(st.st_mode))
                         client.request.is_uri_dir = true;
                     else
                     {
@@ -298,6 +331,7 @@ std::string Server::readRequest(int epoll_fd, int client_fd)
                         sendResponse(client_fd, response, client.request.keep_alive);
                         client.is_request_full = true;
                         client.should_ignore = true;
+                        client.keep_alive = client.request.keep_alive;
                         return "";
                     }
                     std::string upload_dir = client.request.location.upload_dir;
@@ -307,6 +341,7 @@ std::string Server::readRequest(int epoll_fd, int client_fd)
                         sendResponse(client_fd, response, client.request.keep_alive);
                         client.is_request_full = true;
                         client.should_ignore = true;
+                        client.keep_alive = client.request.keep_alive;
                         return "";
                     }
                     if (!S_ISDIR(st.st_mode))
@@ -315,6 +350,7 @@ std::string Server::readRequest(int epoll_fd, int client_fd)
                         sendResponse(client_fd, response, client.request.keep_alive);
                         client.is_request_full = true;
                         client.should_ignore = true;
+                        client.keep_alive = client.request.keep_alive;
                         return "";
                     }
                     if (access(upload_dir.c_str(), W_OK) == -1)
@@ -323,7 +359,8 @@ std::string Server::readRequest(int epoll_fd, int client_fd)
                         sendResponse(client_fd, response, client.request.keep_alive);
                         client.is_request_full = true;
                         client.should_ignore = true;
-                        return ""; 
+                        client.keep_alive = client.request.keep_alive;
+                        return "";
                     }
                     if (client.request.headers.find("content-type") == client.request.headers.end())
                     {
@@ -331,6 +368,7 @@ std::string Server::readRequest(int epoll_fd, int client_fd)
                         sendResponse(client_fd, response, client.request.keep_alive);
                         client.is_request_full = true;
                         client.should_ignore = true;
+                        client.keep_alive = client.request.keep_alive;
                         return "";
                     }
                     size_t multipart_pos = client.request.headers["content-type"].find("multipart/form-data;");
@@ -340,6 +378,7 @@ std::string Server::readRequest(int epoll_fd, int client_fd)
                         sendResponse(client_fd, response, client.request.keep_alive);
                         client.is_request_full = true;
                         client.should_ignore = true;
+                        client.keep_alive = client.request.keep_alive;
                         return "";
                     }
                     size_t boundary_pos = client.request.headers["content-type"].find("boundary=");
@@ -349,6 +388,7 @@ std::string Server::readRequest(int epoll_fd, int client_fd)
                         sendResponse(client_fd, response, client.request.keep_alive);
                         client.is_request_full = true;
                         client.should_ignore = true;
+                        client.keep_alive = client.request.keep_alive;
                         return "";
                     }
                     client.request.body_boundary = "--" + client.request.headers["content-type"].substr(boundary_pos + 9);
@@ -382,6 +422,7 @@ std::string Server::readRequest(int epoll_fd, int client_fd)
                     sendResponse(client_fd, response, client.request.keep_alive);
                     client.is_request_full = true;
                     client.should_ignore = true;
+                    client.keep_alive = client.request.keep_alive;
                     return "";
                 }
             }
@@ -391,6 +432,7 @@ std::string Server::readRequest(int epoll_fd, int client_fd)
                 sendResponse(client_fd, response, client.request.keep_alive);
                 client.is_request_full = true;
                 client.should_ignore = true;
+                client.keep_alive = client.request.keep_alive;
                 return "";
             }
             size_t filename_pos = client.request.body_headers["content-disposition"].find("filename=");
@@ -400,12 +442,13 @@ std::string Server::readRequest(int epoll_fd, int client_fd)
                 sendResponse(client_fd, response, client.request.keep_alive);
                 client.is_request_full = true;
                 client.should_ignore = true;
+                client.keep_alive = client.request.keep_alive;
                 return "";
             }
             client.request.bodyfile_name = client.request.body_headers["content-disposition"].substr(filename_pos + 9);
             client.request.bodyfile_name.erase(0, 1);
             client.request.bodyfile_name.erase(client.request.bodyfile_name.size() - 1, 1);
-            //make client directory
+            // make client directory
             std::string upload_dir = client.request.location.upload_dir + "/" + "Client_" + tostring(client_fd);
             mkdir(upload_dir.c_str(), 0777);
             std::string upload_file = upload_dir + "/" + client.request.bodyfile_name;
@@ -416,6 +459,7 @@ std::string Server::readRequest(int epoll_fd, int client_fd)
                 sendResponse(client_fd, response, client.request.keep_alive);
                 client.is_request_full = true;
                 client.should_ignore = true;
+                client.keep_alive = client.request.keep_alive;
                 return "";
             }
             client.total_bytes_written += body_headers_string.size() + 4;
@@ -424,7 +468,7 @@ std::string Server::readRequest(int epoll_fd, int client_fd)
             client.request.body_headers_done = true;
             client.just_took_headers = true;
         }
-//==================================================================BODY WRITE=======================================================================
+        //==================================================================BODY WRITE=======================================================================
         if (client.just_took_headers)
         {
             client.body_buffer = client.temporary_body;
@@ -443,8 +487,8 @@ std::string Server::readRequest(int epoll_fd, int client_fd)
         else if (end_boundry_pos != std::string::npos)
         {
             client.to_write = client.body_buffer.substr(0, end_boundry_pos);
-            client.temporary_body = client.body_buffer.substr(end_boundry_pos + client.request.body_boundary.size() +6);
-            client.total_bytes_written += client.request.body_boundary.size() +6;
+            client.temporary_body = client.body_buffer.substr(end_boundry_pos + client.request.body_boundary.size() + 6);
+            client.total_bytes_written += client.request.body_boundary.size() + 6;
             client.boundary_found = true;
         }
         else
@@ -473,6 +517,7 @@ std::string Server::readRequest(int epoll_fd, int client_fd)
                 sendResponse(client_fd, response, client.request.keep_alive);
                 close(client.file_fd);
                 client.is_request_full = true;
+                client.keep_alive = client.request.keep_alive;
                 client.should_ignore = true;
                 return "";
             }
@@ -484,6 +529,7 @@ std::string Server::readRequest(int epoll_fd, int client_fd)
                     sendResponse(client_fd, response, client.request.keep_alive);
                     close(client.file_fd);
                     client.is_request_full = true;
+                    client.keep_alive = client.request.keep_alive;
                     client.should_ignore = true;
                     return "";
                 }
@@ -501,9 +547,10 @@ std::string Server::readRequest(int epoll_fd, int client_fd)
             close(client.file_fd);
             std::string response = buildResponse(buildErrorPage(201), ".html", 201, false, "", client.request.keep_alive);
             sendResponse(client_fd, response, client.request.keep_alive);
+            client.keep_alive = client.request.keep_alive;
         }
     }
-//===================================================POST END===============================================================
+    //===================================================POST END===============================================================
     if (client.is_post && !client.content_lenght_present)
     {
         std::string response = buildResponse(buildErrorPage(411), ".html", 411, false, "", false);
@@ -553,7 +600,8 @@ std::string Server::readRequest(int epoll_fd, int client_fd)
         }
         else if (client.total_bytes_written >= client.content_len)
         {
-            if (client.is_post && client.total_bytes_written > client.content_len) {
+            if (client.is_post && client.total_bytes_written > client.content_len)
+            {
                 std::string response = buildResponse(buildErrorPage(400), ".html", 400, false, "", false);
                 sendResponse(client_fd, response, false);
                 client.is_request_full = true;
@@ -578,139 +626,139 @@ std::string Server::readRequest(int epoll_fd, int client_fd)
 std::vector<std::string> Server::getheadersLines(const std::string req, bool &flag, int &error_status, std::string &body)
 {
     std::string sub_req;
-	std::vector<std::string> lines;
-	size_t pos = req.find("\r\n\r\n");
-	if (pos == std::string::npos)
+    std::vector<std::string> lines;
+    size_t pos = req.find("\r\n\r\n");
+    if (pos == std::string::npos)
     {
         flag = false;
         error_status = 400;
-		return lines;
+        return lines;
     }
-	if (pos == 0)
+    if (pos == 0)
     {
-		flag = false;
+        flag = false;
         error_status = 400;
-		return lines;
+        return lines;
     }
-	sub_req = req.substr(0, pos);
-	int start = 0;
-	for (size_t j = 0; j < sub_req.size(); j++)
-	{
-		if ((sub_req[j] == '\r' && sub_req[j + 1] == '\n') || j + 1 == sub_req.size())
-		{
-			lines.push_back(sub_req.substr(start, (j + 1 == sub_req.size()) ? j - start + 1 : j - start));
-			j++;
-			start = j + 1;
-		}
-		else if (!std::isprint(sub_req[j]))
+    sub_req = req.substr(0, pos);
+    int start = 0;
+    for (size_t j = 0; j < sub_req.size(); j++)
+    {
+        if ((sub_req[j] == '\r' && sub_req[j + 1] == '\n') || j + 1 == sub_req.size())
         {
-			flag = false;
-            error_status = 400;
-		    return lines;
+            lines.push_back(sub_req.substr(start, (j + 1 == sub_req.size()) ? j - start + 1 : j - start));
+            j++;
+            start = j + 1;
         }
-	}
-	// if (lines.size() == 1) // hadi khsha t7yd bach ndwzo GET / HTTP/1.0\r\n\r\n
+        else if (!std::isprint(sub_req[j]))
+        {
+            flag = false;
+            error_status = 400;
+            return lines;
+        }
+    }
+    // if (lines.size() == 1) // hadi khsha t7yd bach ndwzo GET / HTTP/1.0\r\n\r\n
     // {
-	// 	flag = false;
+    // 	flag = false;
     //     error_status = 400;
-	// 	return lines;
+    // 	return lines;
     // }
     body = req.substr(pos + 4);
-	return lines;
+    return lines;
 }
 
 bool Server::parse_path(std::string &path)
 {
     if (path.empty() || path[0] != '/')
-		return false;
-	if (path.find("//") != std::string::npos)
-		return false;
+        return false;
+    if (path.find("//") != std::string::npos)
+        return false;
     for (size_t i = 0; i < path.length(); i++)
     {
-        if (!isalnum(path[i]) && path[i] != '/' && path[i] != '_' && path[i] != '-' && path[i] != '.')
+        if (!isalnum(path[i]) && path[i] != '/' && path[i] != '_' && path[i] != '-' && path[i] != '.' && path[i] != '&' && path[i] != '=' && path[i] != '?')
             return false;
     }
     return true;
 }
 
-bool Server::parse_methode(std::string *words, int &error_status, Server::Request &request)
+bool Server::parse_methode(std::string *words, int &error_status, Request &request)
 {
     std::string http_versions[] = {"HTTP/0.9", "HTTP/1.0", "HTTP/1.1", "HTTP/2.0", "HTTP/3.0"};
     size_t http_versions_length = sizeof(http_versions) / sizeof(http_versions[0]);
-	std::string http_methodes[] = {"GET", "POST", "DELETE", "PATCH", "PUT", "HEAD", "OPTIONS"};
+    std::string http_methodes[] = {"GET", "POST", "DELETE", "PATCH", "PUT", "HEAD", "OPTIONS"};
     size_t http_methodes_length = sizeof(http_methodes) / sizeof(http_methodes[0]);
-	for (size_t j = 0; j < http_methodes_length; j++)
+    for (size_t j = 0; j < http_methodes_length; j++)
     {
-		if (words[0] == http_methodes[j])
-			break;
-		if (j == 6)
+        if (words[0] == http_methodes[j])
+            break;
+        if (j == 6)
         {
-			error_status = 400;
-			return false;
-		}
-	}
+            error_status = 400;
+            return false;
+        }
+    }
     if (words[0] == "PATCH" || words[0] == "PUT" || words[0] == "HEAD" || words[0] == "OPTIONS")
     {
         error_status = 501;
         return false;
     }
-	if (words[0] != "GET" && words[0] != "POST" && words[0] != "DELETE")
+    if (words[0] != "GET" && words[0] != "POST" && words[0] != "DELETE")
     {
-		error_status = 400;
-		return false;
-	}
-	if (!parse_path(words[1]))
+        error_status = 400;
+        return false;
+    }
+    if (!parse_path(words[1]))
     {
-		error_status = 400;
-		return false;
-	}
-	for (size_t i = 0; i < http_versions_length; i++)
+        error_status = 400;
+        return false;
+    }
+    for (size_t i = 0; i < http_versions_length; i++)
     {
-		if (words[2] == http_versions[i])
-			break;
-		if (i == 4)
+        if (words[2] == http_versions[i])
+            break;
+        if (i == 4)
         {
-			error_status = 400;
-			return false;
-		}
-	}
-	if (words[2] != "HTTP/1.0" && words[2] != "HTTP/1.1")
+            error_status = 400;
+            return false;
+        }
+    }
+    if (words[2] != "HTTP/1.0" && words[2] != "HTTP/1.1")
     {
-		error_status = 400;
-		return false;
-	}
+        error_status = 400;
+        return false;
+    }
     request.method = words[0];
     request.uri = words[1];
     request.http_version = words[2];
-	return true;
+    return true;
 }
 
 std::string Server::str_tolower(std::string str)
 {
     std::string result = str;
-	for (size_t i = 0; i < str.size(); i++)
-		result[i] = std::tolower((unsigned char)str[i]);
-	return result;
+    for (size_t i = 0; i < str.size(); i++)
+        result[i] = std::tolower((unsigned char)str[i]);
+    return result;
 }
 
 bool Server::check_allowedfirst(std::string &first)
 {
     // std::string allowed_first = "!#$%&'*+-.^_`|~:";
-	for (size_t i = 0; i < first.size(); i++)
-	{
-		if (isalnum(first[i]) || first[i] == '-' || first[i] == ':')
-			continue ;
-		else
-			return false;
-		// for (int j = 0; j < allowed_first.size(); j++)
-		// {
-		// 	if (first[i] == allowed_first[j])
-		// 		break;
-		// 	if (j == allowed_first.size() - 1)
-		// 		return false;
-		// }
-	}
-	return true;
+    for (size_t i = 0; i < first.size(); i++)
+    {
+        if (isalnum(first[i]) || first[i] == '-' || first[i] == ':')
+            continue;
+        else
+            return false;
+        // for (int j = 0; j < allowed_first.size(); j++)
+        // {
+        // 	if (first[i] == allowed_first[j])
+        // 		break;
+        // 	if (j == allowed_first.size() - 1)
+        // 		return false;
+        // }
+    }
+    return true;
 }
 
 bool Server::parse_headers(std::string &line, std::map<std::string, std::string> &map, int &error_status, int option, const std::string boundary)
@@ -719,39 +767,41 @@ bool Server::parse_headers(std::string &line, std::map<std::string, std::string>
     if (line.empty())
     {
         error_status = 400;
-		return false;
+        return false;
     }
-    if (!option) {
-        if (line != boundary) {
+    if (!option)
+    {
+        if (line != boundary)
+        {
             error_status = 400;
-		    return false;
+            return false;
         }
         else
             return true;
     }
-	size_t pos = line.find(':');
-	if (pos == std::string::npos)
+    size_t pos = line.find(':');
+    if (pos == std::string::npos)
     {
         error_status = 400;
-		return false;
+        return false;
     }
-	if (pos == line.size() - 1)
+    if (pos == line.size() - 1)
     {
         error_status = 400;
-		return false;
+        return false;
     }
-	if (line[pos + 1] == ':')
+    if (line[pos + 1] == ':')
     {
         error_status = 400;
-		return false;
+        return false;
     }
-	std::string first = line.substr(0, pos + 1);
-	first = str_tolower(first);
+    std::string first = line.substr(0, pos + 1);
+    first = str_tolower(first);
     // std::cout << "first: " << first << std::endl;
-	if (first.size() == 1 || !check_allowedfirst(first))
+    if (first.size() == 1 || !check_allowedfirst(first))
     {
         error_status = 400;
-		return false;
+        return false;
     }
     first = first.substr(0, pos);
     pos++;
@@ -764,16 +814,15 @@ bool Server::parse_headers(std::string &line, std::map<std::string, std::string>
     }
     std::string second = line.substr(pos);
     map[first] = second;
-	return true;
+    return true;
 }
 
-
-bool Server::parse_lines(std::vector<std::string> lines, Server::Request &request, int &error_status)
+bool Server::parse_lines(std::vector<std::string> lines, Request &request, int &error_status)
 {
     std::string *words;
 
-	for (size_t i = 0; i < lines.size(); i++)
-	{
+    for (size_t i = 0; i < lines.size(); i++)
+    {
         if (i == 0)
         {
             size_t size = countParts(lines[i]);
@@ -794,12 +843,12 @@ bool Server::parse_lines(std::vector<std::string> lines, Server::Request &reques
             }
             delete[] words;
         }
-		else if (i > 0)
-		{
+        else if (i > 0)
+        {
             if (!parse_headers(lines[i], request.headers, error_status, 1, ""))
-				return false;
-		}
-	}
+                return false;
+        }
+    }
     if (request.method == "POST")
     {
         std::map<std::string, std::string>::iterator found = request.headers.find("content-length");
@@ -810,10 +859,10 @@ bool Server::parse_lines(std::vector<std::string> lines, Server::Request &reques
             return false;
         }
     }
-	return true;
+    return true;
 }
 
-bool Server::parseRequest(int client_fd, std::string request_string, Server::Request &request) // this is the core function that processes the http requests our webserver receives
+bool Server::parseRequest(int client_fd, std::string request_string, Request &request) // this is the core function that processes the http requests our webserver receives
 {
     bool flag = true;
     int error_status = 0;
@@ -838,14 +887,17 @@ bool Server::parseRequest(int client_fd, std::string request_string, Server::Req
     request.keep_alive = false;
     if (found != request.headers.end() && found->second == "keep-alive")
         request.keep_alive = true;
-    
-    if (client_addresses.find(client_fd) != client_addresses.end()) { //zakaria
+
+    if (client_addresses.find(client_fd) != client_addresses.end())
+    { // zakaria
         sockaddr_in addr = client_addresses[client_fd];
         char ip_str[INET_ADDRSTRLEN];
         inet_ntop(AF_INET, &addr.sin_addr, ip_str, sizeof(ip_str));
         request.remote_addr = ip_str;
         request.remote_port = ntohs(addr.sin_port);
-    } else {
+    }
+    else
+    {
         request.remote_addr = "127.0.0.1";
         request.remote_port = 0;
     }
@@ -964,47 +1016,50 @@ std::string dirlisntening_gen(std::string request_uri, std::string path, int &co
 
 std::string Server::buildErrorPage(int code)
 {
-    std::string html = 
+    std::string html =
         "<!DOCTYPE html>\n"
         "<html lang=\"en\">\n"
         "<head>\n"
         "    <meta charset=\"UTF-8\">\n"
         "    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n"
-        "    <title>" + tostring(code) + std::string(" ") + status_codes[code] + "</title>\n"
-        "    <style>\n"
-        "        body {\n"
-        "            display: flex;\n"
-        "            flex-direction: column;\n"
-        "            justify-content: center;\n"
-        "            align-items: center;\n"
-        "            height: 100vh;\n"
-        "            margin: 0;\n"
-        "            font-family: Arial, sans-serif;\n"
-        "            background-color: #f8f8f8;\n"
-        "            color: #333;\n"
-        "        }\n"
-        "        h1 {\n"
-        "            font-size: 6em;\n"
-        "            margin: 0;\n"
-        "        }\n"
-        "        p {\n"
-        "            font-size: 1.5em;\n"
-        "        }\n"
-        "        a {\n"
-        "            margin-top: 20px;\n"
-        "            text-decoration: none;\n"
-        "            color: #007BFF;\n"
-        "        }\n"
-        "        a:hover {\n"
-        "            text-decoration: underline;\n"
-        "        }\n"
-        "    </style>\n"
-        "</head>\n"
-        "<body>\n"
-        "    <h1>" + tostring(code) + "</h1>\n"
-        "    <p>" + status_codes[code] + "</p>\n"
-        "</body>\n"
-        "</html>\n";
+        "    <title>" +
+        tostring(code) + std::string(" ") + status_codes[code] + "</title>\n"
+                                                                 "    <style>\n"
+                                                                 "        body {\n"
+                                                                 "            display: flex;\n"
+                                                                 "            flex-direction: column;\n"
+                                                                 "            justify-content: center;\n"
+                                                                 "            align-items: center;\n"
+                                                                 "            height: 100vh;\n"
+                                                                 "            margin: 0;\n"
+                                                                 "            font-family: Arial, sans-serif;\n"
+                                                                 "            background-color: #f8f8f8;\n"
+                                                                 "            color: #333;\n"
+                                                                 "        }\n"
+                                                                 "        h1 {\n"
+                                                                 "            font-size: 6em;\n"
+                                                                 "            margin: 0;\n"
+                                                                 "        }\n"
+                                                                 "        p {\n"
+                                                                 "            font-size: 1.5em;\n"
+                                                                 "        }\n"
+                                                                 "        a {\n"
+                                                                 "            margin-top: 20px;\n"
+                                                                 "            text-decoration: none;\n"
+                                                                 "            color: #007BFF;\n"
+                                                                 "        }\n"
+                                                                 "        a:hover {\n"
+                                                                 "            text-decoration: underline;\n"
+                                                                 "        }\n"
+                                                                 "    </style>\n"
+                                                                 "</head>\n"
+                                                                 "<body>\n"
+                                                                 "    <h1>" +
+        tostring(code) + "</h1>\n"
+                         "    <p>" +
+        status_codes[code] + "</p>\n"
+                             "</body>\n"
+                             "</html>\n";
     return html;
 }
 
@@ -1027,10 +1082,10 @@ size_t countPath(const std::string line)
     }
     return count;
 }
-std::string* split_path(const std::string line, size_t &count)
+std::string *split_path(const std::string line, size_t &count)
 {
     count = countPath(line);
-    std::string* parts = new std::string[count];
+    std::string *parts = new std::string[count];
     size_t i = 0;
     size_t idx = 0;
     size_t size = line.size();
@@ -1043,9 +1098,9 @@ std::string* split_path(const std::string line, size_t &count)
         size_t j = i;
         while (j < size)
         {
-        	if (line[j] == '/')
-        	        break;
-        	j++;
+            if (line[j] == '/')
+                break;
+            j++;
         }
         parts[idx++] = line.substr(i, j - i);
         i = j;
@@ -1053,29 +1108,32 @@ std::string* split_path(const std::string line, size_t &count)
     return parts;
 }
 
-std::string Server::simplifyPath(std::string path) {
-	size_t count = 0;
-	std::string *words = split_path(path, count);
-	std::string correct_path;
-	std::stack <std::string> s;
-	for (size_t i = 0; i < count; i++)
-	{
+std::string Server::simplifyPath(std::string path)
+{
+    size_t count = 0;
+    std::string *words = split_path(path, count);
+    std::string correct_path;
+    std::stack<std::string> s;
+    for (size_t i = 0; i < count; i++)
+    {
         if (words[i] == "..")
         {
             if (!s.empty())
                 s.pop();
         }
-		else if (words[i] == ".")
-		{
-			continue;
-		}
-		else{
+        else if (words[i] == ".")
+        {
+            continue;
+        }
+        else
+        {
             s.push(words[i]);
-		}
-	}
+        }
+    }
     if (s.empty())
         return "/";
-    else {
+    else
+    {
         while (!s.empty())
         {
             correct_path.insert(0, "/" + s.top());
@@ -1083,35 +1141,36 @@ std::string Server::simplifyPath(std::string path) {
         }
     }
     delete[] words;
-	return (correct_path);
+    return (correct_path);
 }
 
 std::vector<std::string> Server::get_bodyheaders_Lines(const std::string req)
 {
     std::string sub_req;
-	std::vector<std::string> lines;
-	size_t pos = req.find("\r\n\r\n");
-	sub_req = req.substr(0, pos);
-	int start = 0;
-	for (size_t j = 0; j < sub_req.size(); j++)
-	{
-		if ((sub_req[j] == '\r' && sub_req[j + 1] == '\n') || j + 1 == sub_req.size())
-		{
-			lines.push_back(sub_req.substr(start, (j + 1 == sub_req.size()) ? j - start + 1 : j - start));
-			j++;
-			start = j + 1;
-		}
-	}
-	return lines;
+    std::vector<std::string> lines;
+    size_t pos = req.find("\r\n\r\n");
+    sub_req = req.substr(0, pos);
+    int start = 0;
+    for (size_t j = 0; j < sub_req.size(); j++)
+    {
+        if ((sub_req[j] == '\r' && sub_req[j + 1] == '\n') || j + 1 == sub_req.size())
+        {
+            lines.push_back(sub_req.substr(start, (j + 1 == sub_req.size()) ? j - start + 1 : j - start));
+            j++;
+            start = j + 1;
+        }
+    }
+    return lines;
 }
 
-bool Server::serveClient(int client_fd, Server::Request request)
+bool Server::serveClient(int client_fd, Request request)
 {
     Webserv::Server server;
     if (request.method == "GET")
     {
         server = *clientfd_to_server[client_fd];
         struct stat st;
+        std::cout << request.uri << std::endl;
 
         if (!isUriExists(request.uri, server, false))
         {
@@ -1126,11 +1185,11 @@ bool Server::serveClient(int client_fd, Server::Request request)
                 std::string response = buildResponse(buildErrorPage(405), ".html", 405, false, "", request.keep_alive);
                 return sendResponse(client_fd, response, request.keep_alive);
             }
-            if (location.isRedirection) 
+            if (location.isRedirection)
             {
-                if (!location.redirectionIsText) 
+                if (!location.redirectionIsText)
                 {
-                    if (location.redirect_relative) 
+                    if (location.redirect_relative)
                     {
                         if (!isUriExists(location.redirection.second, server, true)) // hadi drnaha 3la hsab return location wach exists
                         {
@@ -1140,7 +1199,7 @@ bool Server::serveClient(int client_fd, Server::Request request)
                         std::string response = buildResponse("", "", location.redirection.first, true, location.redirection.second, request.keep_alive);
                         return sendResponse(client_fd, response, request.keep_alive);
                     }
-                    else if (location.redirect_absolute) 
+                    else if (location.redirect_absolute)
                     {
                         std::string response = buildResponse("", "", location.redirection.first, true, location.redirection.second, request.keep_alive);
                         return sendResponse(client_fd, response, request.keep_alive);
@@ -1154,7 +1213,8 @@ bool Server::serveClient(int client_fd, Server::Request request)
             }
             std::string toSearch = location.root + request.uri;
             size_t pos = simplifyPath(toSearch).find(location.root);
-            if (pos == std::string::npos || pos != 0) {
+            if (pos == std::string::npos || pos != 0)
+            {
                 std::string response = buildResponse(buildErrorPage(403), ".html", 403, false, "", request.keep_alive);
                 return sendResponse(client_fd, response, request.keep_alive);
             }
@@ -1198,20 +1258,25 @@ bool Server::serveClient(int client_fd, Server::Request request)
                 }
                 else if (S_ISREG(st.st_mode))
                 {
+                    std::cerr << "to search: " << toSearch.c_str() << std::endl;
                     if (access(toSearch.c_str(), R_OK) == 0)
                     {
                         std::string ext = getExtension(toSearch);
                         std::string response;
-                        if (getLocation(request.uri, server).hasCgi && (ext == ".py" || ext == ".php")) // cgi block
+                        if (getLocation(request.uri, server).hasCgi && (ext == ".py" || ext == ".php"))
                         {
-                            std::cout << "cgi block must be here\n";
-                            CGI cgi(this, request, toSearch, ext);
-                            response = cgi.execute(request, toSearch);
-                        } 
+                            // non blocking cgi
+                            if (!setupCGI(request, toSearch, ext, client_fd))
+                            {
+                                std::string response = buildResponse(buildErrorPage(500), ".html", 500, false, "", request.keep_alive);
+                                return sendResponse(client_fd, response, request.keep_alive);
+                            }
+                            return true;
+                        }
                         else
                         {
                             return sendFileResponse(client_fd, toSearch, ext, 200, request.keep_alive);
-                        } 
+                        }
                         return sendResponse(client_fd, response, request.keep_alive);
                     }
                     else
@@ -1247,7 +1312,8 @@ bool Server::serveClient(int client_fd, Server::Request request)
             }
             std::string filepath = location.root + request.uri;
             size_t pos = simplifyPath(filepath).find(location.root);
-            if (pos == std::string::npos || pos != 0) {
+            if (pos == std::string::npos || pos != 0)
+            {
                 std::string response = buildResponse(buildErrorPage(403), ".html", 403, false, "", request.keep_alive);
                 return sendResponse(client_fd, response, request.keep_alive);
             }
@@ -1284,10 +1350,17 @@ bool Server::serveClient(int client_fd, Server::Request request)
 
 void Server::closeClient(int epoll_fd, int client_fd, bool inside_loop)
 {
+    std::vector<int> cgi_to_clean;
+    for (std::map<int, CgiState>::iterator it = cgi_states.begin(); it != cgi_states.end(); it++)
+        if (it->second.state.client_fd == client_fd)
+            cgi_to_clean.push_back(it->first);
+    for (size_t i = 0; i < cgi_to_clean.size(); i++)
+        cleanupCGI(epoll_fd, cgi_to_clean[i], true);
+
     client_addresses.erase(client_fd);
     if (inside_loop)
         this->client_fds.erase(std::remove(client_fds.begin(), client_fds.end(), client_fd), client_fds.end());
-    read_states.erase(client_fd); 
+    read_states.erase(client_fd);
     epoll_ctl(epoll_fd, EPOLL_CTL_DEL, client_fd, NULL);
     close(client_fd);
 }
@@ -1336,7 +1409,7 @@ bool Server::sendFileResponse(int client_fd, const std::string file_path, const 
     if (file_fd == -1)
         return false;
     this->fileFdstoClose.push_back(file_fd);
-    
+
     std::string CRLF = "\r\n";
     std::string response_headers;
     response_headers += "HTTP/1.0 " + tostring(status) + " " + status_codes[status] + CRLF;
@@ -1378,7 +1451,7 @@ bool Server::sendResponse(int client_fd, const std::string response, bool keep_a
     state.pending_response = response;
     state.bytes_sent = 0;
     state.keep_alive = keep_alive;
-    
+
     return continueSending(client_fd);
 }
 
@@ -1480,7 +1553,7 @@ void Server::initialize(void)
         int option = 1;
         setsockopt(sock_fd, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option));
         sockaddr_in address = infos(servers[i]);
-        if (bind(sock_fd, reinterpret_cast<sockaddr*>(&address), sizeof(address)) == -1)
+        if (bind(sock_fd, reinterpret_cast<sockaddr *>(&address), sizeof(address)) == -1)
         {
             std::cerr << "Error: Bind failed in socket " << i + 1 << "." << std::endl;
             countingFailedSockets++;
@@ -1513,9 +1586,16 @@ void Server::initialize(void)
     {
         int n = epoll_wait(epoll_fd, events, MAX_EVENTS, 1000);
         checkTimeoutClients(epoll_fd);
+        checkTimeoutCGI(epoll_fd);
         for (int i = 0; i < n; i++)
         {
             int fd = events[i].data.fd;
+            if (cgi_states.find(fd) != cgi_states.end())
+            {
+                handleCGIOutput(epoll_fd, fd);
+                continue;
+            }
+
             bool is_listening = false;
             for (size_t j = 0; j < socket_fds.size(); j++)
             {
@@ -1529,7 +1609,7 @@ void Server::initialize(void)
             {
                 sockaddr_in client_addr;
                 socklen_t client_len = sizeof(client_addr);
-                int client_fd = accept(fd, reinterpret_cast<sockaddr*>(&client_addr), &client_len);
+                int client_fd = accept(fd, reinterpret_cast<sockaddr *>(&client_addr), &client_len);
                 std::cout << "client_fd: " << client_fd << std::endl;
                 if (client_fd != -1)
                 {
@@ -1579,12 +1659,12 @@ void Server::initialize(void)
                     }
                 }
                 if (request_string.empty())
-                { 
+                {
                     closeClient(epoll_fd, fd, true);
                     continue;
                 }
-                // std::cout << request_string << std::endl;
-                Server::Request request;
+                std::cout << request_string << std::endl;
+                Request request;
                 if (!parseRequest(fd, request_string, request))
                 {
                     closeClient(epoll_fd, fd, true);
@@ -1592,6 +1672,20 @@ void Server::initialize(void)
                 }
                 // std::cout << request.uri << std::endl;
                 bool keep_alive = serveClient(fd, request);
+
+                for (std::map<int, CgiState>::iterator it = cgi_states.begin(); it != cgi_states.end(); it++)
+                {
+                    if (it->second.state.client_fd == fd && !it->second.added_to_epoll)
+                    {
+                        // add CGI pipe_out to epoll
+                        epoll_event ev;
+                        ev.events = EPOLLIN;
+                        ev.data.fd = it->first;
+                        epoll_ctl(epoll_fd, EPOLL_CTL_ADD, it->first, &ev);
+                        it->second.added_to_epoll = true;
+                    }
+                }
+
                 read_states.erase(fd);
                 if (client_states.find(fd) != client_states.end()) // check if there's pending data to send
                 {
@@ -1608,4 +1702,129 @@ void Server::initialize(void)
     for (size_t i = 0; i < this->fileFdstoClose.size(); i++)
         close(this->fileFdstoClose[i]);
     close(epoll_fd);
+}
+
+// cgi block server
+
+bool Server::setupCGI(Request &request, std::string &script_path, std::string &extension, int client_fd)
+{
+    CGI cgi(this, request, script_path, extension);
+
+    CgiState cgi_state;
+    cgi_state.state.client_fd = client_fd;
+    cgi_state.start_time = time(NULL);
+
+    if (!cgi.start(cgi_state.state))
+        return false;
+
+    if (cgi_state.state.pipe_out[0] != -1)
+    {
+        setNonBlockingFD(cgi_state.state.pipe_out[0]);
+        setNonBlockingFD(cgi_state.state.pipe_err[0]);
+
+        cgi_states[cgi_state.state.pipe_out[0]] = cgi_state;
+        return true;
+    }
+    return false;
+}
+void Server::handleCGIOutput(int epoll_fd, int pipe_fd)
+{
+    CgiState &cgi_state = cgi_states[pipe_fd];
+    CGI cgi(this, cgi_state.state.request, cgi_state.state.script_path, cgi_state.state.extension);
+
+    bool more_data = cgi.handleOutput(cgi_state.state);
+
+    if (!more_data || cgi_state.state.process_complete)
+    {
+        std::cout << "[DEBUG] handleCGIOutput: pipe_fd=" << pipe_fd
+                  << ", client_fd=" << cgi_state.state.client_fd
+                  << ", output_size=" << cgi_state.state.output.size()
+                  << ", headers_complete=" << cgi_state.state.headers_complete
+                  << ", more_data=" << more_data
+                  << ", process_complete=" << cgi_state.state.process_complete
+                  << std::endl;
+
+        // Only send response once
+        if (!cgi_state.state.response_sent_to_client && !cgi_state.state.output.empty())
+        {
+            std::string response;
+            if (cgi_state.state.syntax_error)
+            {
+                response = CGI::buildErrorResponse(this, cgi_state.state);
+            }
+            else
+            {
+                response = CGI::buildResponseFromState(this, cgi_state.state, cgi_state.state.request.keep_alive);
+            }
+
+            std::cout << "response length (handleCGIOutput): " << response.size() << std::endl;
+
+            cgi_state.state.response_sent_to_client = true; // Mark as sent BEFORE sending
+
+            bool fully_sent = sendResponse(cgi_state.state.client_fd, response, cgi_state.state.request.keep_alive);
+
+            if (client_states.find(cgi_state.state.client_fd) != client_states.end())
+            {
+                // if data is pending, register for EPOLLOUT to continue sending
+                modifyEpollEvents(epoll_fd, cgi_state.state.client_fd, EPOLLIN | EPOLLOUT);
+            }
+            else if (!fully_sent || !cgi_state.state.request.keep_alive)
+            {
+                closeClient(epoll_fd, cgi_state.state.client_fd, true);
+            }
+            // If fully_sent && keep_alive, client stays open for next request
+        }
+        else if (cgi_state.state.output.empty())
+        {
+            sendResponse(cgi_state.state.client_fd, buildResponse(buildErrorPage(500), ".html", 500, false, "", false), false);
+            closeClient(epoll_fd, cgi_state.state.client_fd, true);
+        }
+
+        if (cgi_state.state.process_complete)
+        {
+            cleanupCGI(epoll_fd, pipe_fd, true);
+        }
+    }
+}
+
+void Server::cleanupCGI(int epoll_fd, int pipe_fd, bool kill_process)
+{
+    if (cgi_states.find(pipe_fd) == cgi_states.end())
+        return;
+
+    CgiState &cgi_state = cgi_states[pipe_fd];
+
+    CGI cgi(this, cgi_state.state.request, cgi_state.state.script_path, cgi_state.state.extension);
+
+    if (cgi_state.added_to_epoll) // keep alive from request zakaria
+    {
+        (void) epoll_fd;
+        // std::cout << "removed from epoll\n";
+        // epoll_ctl(epoll_fd, EPOLL_CTL_DEL, pipe_fd, NULL);
+        // cgi_state.added_to_epoll = false;
+    }
+
+    cgi.cleanup(cgi_state.state, kill_process);
+    cgi_states.erase(pipe_fd);
+}
+
+void Server::checkTimeoutCGI(int epoll_fd)
+{
+    time_t now = time(NULL);
+    std::vector<int> timed_out;
+
+    for (std::map<int, CgiState>::iterator it = cgi_states.begin(); it != cgi_states.end(); it++)
+    {
+        if (difftime(now, it->second.start_time) > CGI_TIMEOUT)
+        {
+            std::cerr << "CGI timeout for PID " << it->second.state.pid << std::endl;
+            std::string response = buildResponse(buildErrorPage(504), ".html", 504, false, "", it->second.state.request.keep_alive);
+            sendResponse(it->second.state.client_fd, response, it->second.state.request.keep_alive);
+
+            timed_out.push_back(it->first);
+        }
+    }
+
+    for (size_t i = 0; i < timed_out.size(); i++)
+        cleanupCGI(epoll_fd, timed_out[i], true);
 }

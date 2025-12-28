@@ -1,4 +1,7 @@
 #include "CGI.hpp"
+#include "Server.hpp"
+
+std::map<std::string, std::string> CGI::ext_map;
 
 std::string CGI::trim(std::string &s)
 {
@@ -12,92 +15,335 @@ std::string CGI::trim(std::string &s)
     return result;
 }
 
-CGI::CGI(Server *srv, Server::Request &req, std::string &abs_path, std::string &ext)
+CGI::CGI(Server *srv, Request &req, std::string &abs_path, std::string &ext)
     : server(srv), request(req), script_path(abs_path), extension(ext),
-      env_cgi(NULL), argv(NULL), pid(-1)
+      env_cgi(NULL), argv(NULL)
 {
-    pipe_in[0] = pipe_in[1] = -1;
-    pipe_out[0] = pipe_out[1] = -1;
-    pipe_err[0] = pipe_err[1] = -1;
-
     if (extension == ".php")
         cgi_path = "/usr/bin/php-cgi";
     else
         cgi_path = "/usr/bin/python3";
-
     assignExtension();
 }
 
 CGI::~CGI()
 {
-    cleanup();
+    if (argv)
+    {
+        delete[] argv[0];
+        delete[] argv[1];
+        delete[] argv;
+        argv = NULL;
+    }
+
+    if (env_cgi)
+    {
+        delete[] env_cgi;
+        env_cgi = NULL;
+    }
 }
 
-static bool findHeader(
-    const std::vector<std::pair<std::string, std::string> > &headers,
-    const std::string &key,
-    std::string &outValue
-) {
-    for (size_t i = 0; i < headers.size(); i++) {
-        if (headers[i].first == key) {
-            outValue = headers[i].second;
-            return true;
+bool CGI::start(State &state)
+{
+    state.script_path = script_path;
+    state.extension = extension;
+    state.request = request;
+    state.headers_complete = false;
+    state.process_complete = false;
+    state.response_sent_to_client = false;
+    state.start_time = time(NULL);
+    state.cgi_path = cgi_path;
+    
+    if (cgi_path.empty())
+        return false;
+
+    if (pipe(state.pipe_out) == -1 || pipe(state.pipe_err) == -1 || (request.method == "POST" && pipe(state.pipe_in) == -1)) // delete request
+    {
+        perror("pipe");
+        cleanupPipes(state.pipe_in, state.pipe_out, state.pipe_err);
+        return false;
+    }
+    
+    state.pid = fork();
+    if (state.pid == -1)
+    {
+        perror("fork");
+        cleanupPipes(state.pipe_in, state.pipe_out, state.pipe_err);
+        return false;
+    }
+    
+    if (state.pid == 0)
+        childProcess(state.pipe_in, state.pipe_out, state.pipe_err);
+    else // Parent
+    {
+        close(state.pipe_out[1]);
+        close(state.pipe_err[1]);
+        state.pipe_out[1] = -1;
+        state.pipe_err[1] = -1;
+        
+        if (request.method == "POST") {
+            close(state.pipe_in[0]);
+            state.pipe_in[0] = -1;
+            
+            if (!request.body.empty()) {
+                ssize_t bytes_written = write(state.pipe_in[1], request.body.c_str(), request.body.size());
+                if (bytes_written != static_cast<ssize_t>(request.body.size())) // in case body 3imla9
+                    std::cerr << "CGI Warning: Could not write full body to CGI stdin" << std::endl;
+            }
+            close(state.pipe_in[1]);
+            state.pipe_in[1] = -1;
         }
     }
+    std::cout << "Started CGI process " << state.pid << " for client " << state.client_fd << std::endl;
+    return true;
+}
+void CGI::childProcess(int pipe_in[2], int pipe_out[2], int pipe_err[2])
+{
+    close(pipe_out[0]);
+    close(pipe_err[0]);
+    if (request.method == "POST")
+        close(pipe_in[1]);
+
+    // int flags = fcntl(pipe_out[1], F_GETFL, 0);
+    // fcntl(pipe_out[1], F_SETFL, flags | O_NONBLOCK);
+    // flags = fcntl(pipe_err[1], F_GETFL, 0);
+    // fcntl(pipe_err[1], F_SETFL, flags | O_NONBLOCK);
+    
+    dup2(pipe_out[1], STDOUT_FILENO);
+    dup2(pipe_err[1], STDERR_FILENO);
+    if (request.method == "POST")
+        dup2(pipe_in[0], STDIN_FILENO);
+    
+    close(pipe_out[1]);
+    close(pipe_err[1]);
+    if (request.method == "POST")
+        close(pipe_in[0]);
+    
+    setupEnvironment();
+    convertEnvVarsToCharPtr();
+    setupArguments();
+    
+    if (!changeToScriptDirectory())
+        execve(cgi_path.c_str(), argv, env_cgi);
+    
+    perror("execve");
+    delete[] argv[0];
+    delete[] argv[1];
+    delete[] argv;
+    delete[] env_cgi;
+    exit(1);
+}
+
+bool CGI::handleOutput(State &state)
+{
+    if (state.process_complete)
+        return false;
+    
+    char buffer[65536];
+    ssize_t bytes_read;
+    
+    bytes_read = read(state.pipe_out[0], buffer, sizeof(buffer));
+    if (bytes_read > 0) {
+        state.output.append(buffer, bytes_read);
+        if (!state.headers_complete) {
+            size_t header_end = state.output.find("\r\n\r\n");
+            if (header_end != std::string::npos) {
+                state.headers_complete = true;
+                std::string headers_str = state.output.substr(0, header_end);
+                state.cgi_headers = parseCGIHeaders(headers_str);
+            }
+        }
+        return true;
+    }
+    else if (bytes_read == 0) {
+        close(state.pipe_out[0]);
+        state.pipe_out[0] = -1;
+
+        char err_buffer[65536];
+        ssize_t err_bytes_read = read(state.pipe_err[0], err_buffer, sizeof(err_buffer));
+        if (err_bytes_read == 0) {
+            close(state.pipe_err[0]);
+            state.pipe_err[0] = -1;
+        }
+        else if (err_bytes_read > 0) {
+            std::cerr << "CGI stderr: " << std::string(err_buffer, err_bytes_read) << std::endl;
+            if (state.output.empty()) {
+                state.output.append(err_buffer, err_bytes_read);
+                state.syntax_error = true;
+            }
+        }
+        // cleanup(state, true);
+        state.process_complete = true;
+        return false;
+    }
+    else if (bytes_read == -1) {
+        // perror("read from CGI");
+        // state.process_complete = true;
+        // cleanup(state, true);
+        return true;
+    }
+    
     return false;
 }
 
-
-std::string CGI::execute(Server::Request &req, std::string &abs_path)
+std::string CGI::getExtensionFromContentType(const std::string &content_type)
 {
-    request = req;
-    script_path = abs_path;
-
-    try
-    {
-        setupPipes();
-
-        pid = fork();
-        if (pid == -1)
-        {
-            perror("fork");
-            handlePipeErrors();
-            return server->buildResponse(server->buildErrorPage(500), ".html", 500, false, "", false);
-        }
-
-        if (pid == 0)
-        {
-            childProcess();
-            exit(1);
-        }
-        else
-        {
-            parentProcess();
-            return parseCGIOutput(cgi_output);
-        }
-    }
-    catch (const std::exception &e)
-    {
-        std::cerr << "CGI Error: " << e.what() << std::endl;
-        return server->buildResponse(server->buildErrorPage(500), ".html", 500, false, "", false);
-    }
-
-    return server->buildResponse(server->buildErrorPage(500), ".html", 500, false, "", false);
+    std::map<std::string, std::string>::iterator it = ext_map.find(content_type);
+    if (it != ext_map.end())
+        return it->second;
+    return ".txt";
 }
 
-void CGI::setupPipes()
+std::string CGI::buildResponseFromState(Server *server, State &state, bool keep_alive)
 {
-    if (pipe(pipe_in) == -1 || pipe(pipe_out) == -1 || pipe(pipe_err) == -1)
+    bool redirect = false;
+    std::string location;
+    std::string response = parseCGIOutput(state, redirect, location);
+    
+    if (redirect)
+        return server->buildResponse("", ".html", 302, true, location, keep_alive);
+    
+    int status_code = 200;
+    std::string content_type = ".txt";
+    
+    for (size_t i = 0; i < state.cgi_headers.size(); i++)
     {
-        perror("pipe");
-        handlePipeErrors();
-        throw std::runtime_error("Error: Failed to create pipes");
-    }
+        if (state.cgi_headers[i].first == "status") {
+            std::istringstream ss(state.cgi_headers[i].second);
+            ss >> status_code;
+            if (status_code < 100 || status_code > 599)
+                status_code = 200;
+        }
+        else if (state.cgi_headers[i].first == "content-type")
+        {
+            std::string type = state.cgi_headers[i].second;
+            size_t semicolon = type.find(';');
+            if (semicolon != std::string::npos)
+                type = type.substr(0, semicolon);
+            type = trim(type);
 
-    // don't block the main thread in parent 
-    // fcntl(pipe_out[0], F_SETFL, O_NONBLOCK);
-    // fcntl(pipe_err[0], F_SETFL, O_NONBLOCK);
-    // fcntl(pipe_in[1], F_SETFL, O_NONBLOCK); 
+            content_type = getExtensionFromContentType(type);
+        }
+    }
+    
+    return server->buildResponse(response, content_type, status_code, false, "", keep_alive, state.cgi_headers);
+}
+
+std::string CGI::buildErrorResponse(Server *server, State &state)
+{
+    std::ostringstream oss;
+
+    oss << "<!DOCTYPE html>"
+        << "<html lang='en'>"
+        << "<head>"
+        << "<meta charset='UTF-8' />"
+        << "<title>Syntax Error</title>"
+        << "<style>"
+        << "body { margin:0; height:100vh; display:flex; align-items:center; justify-content:center;"
+        << "background:#f5f5f5; font-family:Arial, Helvetica, sans-serif; }"
+        << ".error-box { padding:24px 32px; background:#fdeaea; color:#a40000;"
+        << "border:1px solid #f5c2c2; border-radius:6px; text-align:center; }"
+        << "</style>"
+        << "</head>"
+        << "<body>"
+        << "<div class='error-box'>"
+        << "<p><strong>"
+        << state.output
+        << "</strong>.</p>"
+        << "</div>"
+        << "</body>"
+        << "</html>";
+
+    std::string response = oss.str();
+    
+    return server->buildResponse(response, ".html", 500, false, "", false);
+}
+
+std::string CGI::parseCGIOutput(State &state, bool &redirect, std::string &location)
+{
+    size_t header_end = state.output.find("\r\n\r\n");
+    if (header_end != std::string::npos)
+    {
+        for (size_t i = 0; i < state.cgi_headers.size(); i++)
+        {
+            if (state.cgi_headers[i].first == "location")
+            {
+                redirect = true;
+                location = state.cgi_headers[i].second;
+                return "";
+            }
+        }
+        
+        return state.output.substr(header_end + 4);
+    }
+    
+    return state.output;
+}
+
+std::vector<std::pair<std::string, std::string> > CGI::parseCGIHeaders(std::string &headers)
+{
+    std::vector<std::pair<std::string, std::string> > cgi_headers;
+    std::istringstream header_stream(headers);
+    std::string line;
+    
+    while (std::getline(header_stream, line))
+    {
+        if (line.empty() || (line[0] == '\r' && line[1] == '\n'))
+            continue;
+            
+        size_t colon = line.find(':');
+        if (colon != std::string::npos)
+        {
+            std::string key = line.substr(0, colon);
+            std::string value = line.substr(colon + 1);
+            
+            key = trim(key);
+            std::transform(key.begin(), key.end(), key.begin(), ::tolower);
+            value = trim(value);
+            
+            cgi_headers.push_back(std::pair<std::string, std::string>(key, value));
+        }
+    }
+    
+    return cgi_headers;
+}
+
+void CGI::cleanup(State &state, bool kill_process)
+{
+    if (kill_process && state.pid > 0)
+    {
+        std::cerr << "cgi killed\n";
+        kill(state.pid, SIGKILL);
+        waitpid(state.pid, NULL, 0); // block the main thread until the process is done
+    }
+    
+    cleanupPipes(state.pipe_in, state.pipe_out, state.pipe_err);
+    
+    state.pid = -1;
+    state.output.clear();
+    state.cgi_headers.clear();
+}
+
+void CGI::cleanupPipes(int pipe_in[2], int pipe_out[2], int pipe_err[2])
+{
+    for (int i = 0; i < 2; i++)
+    {
+        if (pipe_in[i] != -1)
+        {
+            close(pipe_in[i]);
+            pipe_in[i] = -1;
+        }
+        if (pipe_out[i] != -1)
+        {
+            close(pipe_out[i]);
+            pipe_out[i] = -1;
+        }
+        if (pipe_err[i] != -1)
+        {
+            close(pipe_err[i]);
+            pipe_err[i] = -1;
+        }
+    }
 }
 
 void CGI::setupEnvironment()
@@ -284,72 +530,6 @@ int CGI::changeToScriptDirectory() // what if the script includes another file (
     return 0;
 }
 
-void CGI::childProcess()
-{
-    dup2(pipe_in[0], STDIN_FILENO);
-    dup2(pipe_out[1], STDOUT_FILENO);
-    dup2(pipe_err[1], STDERR_FILENO);
-
-    close(pipe_in[0]);
-    close(pipe_in[1]);
-    close(pipe_out[0]);
-    close(pipe_out[1]);
-    close(pipe_err[0]);
-    close(pipe_err[1]);
-
-    setupEnvironment();
-    convertEnvVarsToCharPtr();
-    setupArguments();
-    
-    if (!changeToScriptDirectory())
-        execve(cgi_path.c_str(), argv, env_cgi);
-
-    delete[] argv[0];
-    delete[] argv[1];
-    delete[] argv;
-    delete[] env_cgi;
-
-    exit(1);
-}
-
-void CGI::parentProcess()
-{
-    close(pipe_in[0]);
-    close(pipe_out[1]);
-    close(pipe_err[1]);
-
-    if (request.method == "POST" && !request.body.empty()) // if post is fixed, it must be fixed in here too (charaf)
-    {
-        ssize_t bytes_written = write(pipe_in[1], request.body.c_str(), request.body.size());
-        if (bytes_written != static_cast<ssize_t>(request.body.size()))
-            std::cerr << "Warning: Could not write full body to CGI stdin" << std::endl;
-    }
-    close(pipe_in[1]);
-
-    readFromPipes();
-
-    int status;
-    waitpid(pid, &status, 0);
-
-    if (!error_output.empty())
-        std::cerr << "CGI stderr: " << error_output << std::endl;
-}
-
-void CGI::readFromPipes()
-{
-    char buffer[4096];
-    ssize_t bytes_read;
-
-    // same here, read is gonna failt if it exceeds buffer (charaf) + i think i must set it to nonblocking
-    while ((bytes_read = read(pipe_out[0], buffer, sizeof(buffer))) > 0)
-        cgi_output.append(buffer, bytes_read);
-    close(pipe_out[0]);
-
-    while ((bytes_read = read(pipe_err[0], buffer, sizeof(buffer))) > 0)
-        error_output.append(buffer, bytes_read);
-    close(pipe_err[0]);
-}
-
 void CGI::assignExtension(void)
 {
     ext_map["audio/aac"] = ".aac";
@@ -432,120 +612,4 @@ void CGI::assignExtension(void)
     ext_map["video/3gpp"] = ".3gp";
     ext_map["video/3gpp2"] = ".3g2";
     ext_map["application/x-7z-compressed"] = ".7z";
-}
-
-std::string CGI::parseCGIOutput(std::string &cgi_output)
-{
-    size_t header_end = cgi_output.find("\r\n\r\n");
-    size_t delimiter_len = 4;
-
-    if (header_end != std::string::npos)
-    {
-        std::string headers_str = cgi_output.substr(0, header_end);
-        std::string body = cgi_output.substr(header_end + delimiter_len);
-        
-        std::vector<std::pair<std::string, std::string> > cgi_headers = parseCGIHeaders(headers_str);
-        // print cgi headers
-        // std::cerr << "\nCGI HEADERS:\n";
-        // for (std::vector<std::pair<std::string, std::string> >::const_iterator it = cgi_headers.begin(); it != cgi_headers.end(); it++)
-        // {
-        //     std::cerr << "key: |" << it->first
-        //             << "| value: |" << it->second << "|" << std::endl;
-        // }
-
-        int status_code = 200;
-        std::string value;
-        if (findHeader(cgi_headers, "status", value))
-        {
-            std::istringstream ss(value);
-            ss >> status_code;
-            if (status_code < 100 || status_code > 599)
-                status_code = 200;
-        }
-
-        std::string location;
-        if (findHeader(cgi_headers, "location", location)) {
-            return server->buildResponse("", ".html", 302, true, location, request.keep_alive);
-        }
-
-        std::string ext = ".txt";
-        if (findHeader(cgi_headers, "content-type", value)) {
-            size_t semicolon = value.find(';');
-            if (semicolon != std::string::npos)
-                value = value.substr(0, semicolon);
-            value = trim(value);
-
-            if (ext_map.count(value))
-                ext = ext_map[value];
-        }
-
-        return server->buildResponse(body, ext, status_code, false, "", request.keep_alive, cgi_headers);
-    }
-    else // header not set in cgi output
-        return server->buildResponse(cgi_output, ".txt", 200, false, "", request.keep_alive);
-}
-
-std::vector<std::pair<std::string, std::string> > CGI::parseCGIHeaders(std::string &headers)
-{
-    std::vector<std::pair<std::string, std::string> > cgi_headers;
-    std::istringstream header_stream(headers);
-    std::string line;
-
-    while (std::getline(header_stream, line)) {
-        size_t colon = line.find(':');
-
-        if (colon != std::string::npos) {
-            std::string key = line.substr(0, colon);
-            std::string value = line.substr(colon + 1);
-
-            key = trim(key);
-            std::transform(key.begin(), key.end(), key.begin(), ::tolower);
-            value = trim(value);
-
-            cgi_headers.push_back(std::pair<std::string, std::string>(key, value));
-        }
-    }
-
-    return cgi_headers;
-}
-
-void CGI::cleanup()
-{
-    if (argv)
-    {
-        delete[] argv[0];
-        delete[] argv[1];
-        delete[] argv;
-        argv = NULL;
-    }
-
-    if (env_cgi)
-    {
-        delete[] env_cgi;
-        env_cgi = NULL;
-    }
-
-    handlePipeErrors();
-}
-
-void CGI::handlePipeErrors()
-{
-    for (int i = 0; i < 2; i++)
-    {
-        if (pipe_in[i] != -1)
-        {
-            close(pipe_in[i]);
-            pipe_in[i] = -1;
-        }
-        if (pipe_out[i] != -1)
-        {
-            close(pipe_out[i]);
-            pipe_out[i] = -1;
-        }
-        if (pipe_err[i] != -1)
-        {
-            close(pipe_err[i]);
-            pipe_err[i] = -1;
-        }
-    }
 }

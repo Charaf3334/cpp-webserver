@@ -2,30 +2,13 @@
 #define SERVER_HPP
 
 #include "Webserv.hpp"
+#include "CGI.hpp"
 
 #define MAX_EVENTS 64
+#define CGI_TIMEOUT 30
 
 class Server : public Webserv
 {
-    public:
-        struct Request
-        {
-            bool keep_alive;
-            bool is_uri_dir;
-            bool take_boundry_check_upload_dir;
-            bool body_headers_done;
-            std::string method;
-            std::string uri;
-            std::string http_version;
-            std::string body;
-            std::string body_boundary;
-            std::string bodyfile_name;
-            std::map<std::string, std::string> headers;
-            std::map<std::string, std::string> body_headers;
-            Webserv::Location location;
-            std::string remote_addr; // zakaria
-            int remote_port; // zakaria
-        };
     private:
         struct ClientState
         {
@@ -67,6 +50,7 @@ class Server : public Webserv
             char buffer[61440];
             struct timeval start_time;
             Request request;
+            bool keep_alive;
         };
         std::map<int, sockaddr_in> client_addresses; // zakaria
         static Server* instance;
@@ -90,17 +74,17 @@ class Server : public Webserv
         std::string readRequest(int epoll_fd, int client_fd);
         std::string _trim(std::string str) const;
         bool isContentLengthValid(std::string value);
-        bool parseRequest(int client_fd, std::string request_string, Server::Request &request);
+        bool parseRequest(int client_fd, std::string request_string, Request &request);
         std::string getExtension(std::string file_path);
         std::vector<std::string> getheadersLines(const std::string req, bool &flag, int &error_status, std::string &body);
-        bool parse_lines(std::vector<std::string> lines, Server::Request &request, int &error_status);
+        bool parse_lines(std::vector<std::string> lines, Request &request, int &error_status);
         bool parse_headers(std::string &line, std::map<std::string, std::string> &map, int &error_status, int option, const std::string boundary);
         std::string str_tolower(std::string str);
         bool check_allowedfirst(std::string &first);
-        bool parse_methode(std::string *words, int &error_status, Server::Request &request);
+        bool parse_methode(std::string *words, int &error_status, Request &request);
         bool parse_path(std::string &path);
         std::string tostring(size_t num) const;
-        bool serveClient(int client_fd, Server::Request request);
+        bool serveClient(int client_fd, Request request);
         bool isUriExists(std::string uri, Webserv::Server server, bool flag) const;
         Webserv::Location getLocation(std::string uri, Webserv::Server server);
         bool atleastOneFileExists(Webserv::Location location) const;
@@ -111,6 +95,20 @@ class Server : public Webserv
         bool continueSending(int client_fd);
         void modifyEpollEvents(int epoll_fd, int client_fd, unsigned int events);
         bool sendFileResponse(int client_fd, const std::string file_path, const std::string extension, int status, bool keep_alive, const std::vector<std::pair<std::string, std::string> > &extra_headers = std::vector<std::pair<std::string, std::string> >());
+
+        struct CgiState // cgi 
+        {
+            CGI::State state;
+            time_t start_time;
+            bool added_to_epoll;
+
+            CgiState() : start_time(0), added_to_epoll(false) {}
+        };
+        std::map<int, CgiState> cgi_states; // Key:pipe_out[0] (read end)
+        bool setupCGI(Request &request, std::string &script_path, std::string &extension, int client_fd);
+        void handleCGIOutput(int epoll_fd, int pipe_fd);
+        void cleanupCGI(int epoll_fd, int pipe_fd, bool kill_process = false);
+        void checkTimeoutCGI(int epoll_fd);
 
     public:
         std::string buildResponse(std::string body, std::string extension, int status, bool inRedirection, std::string newPath, bool keep_alive, const std::vector<std::pair<std::string, std::string> > &extra_headers = std::vector<std::pair<std::string, std::string> >());

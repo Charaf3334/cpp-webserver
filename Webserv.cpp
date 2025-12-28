@@ -177,6 +177,7 @@ void Webserv::assignStatusCodes(void)
     status_codes[501] = "Not Implemented";
     status_codes[502] = "Bad Gateway";
     status_codes[503] = "Service Unavailable";
+    status_codes[504] = "Gateway Timeout";
 }
 
 void Webserv::assignContentType(void)
