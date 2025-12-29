@@ -84,7 +84,6 @@ bool CGI::start(State &state)
         if (request.method == "POST") {
             close(state.pipe_in[0]);
             state.pipe_in[0] = -1;
-            
             if (!request.body.empty()) {
                 ssize_t bytes_written = write(state.pipe_in[1], request.body.c_str(), request.body.size());
                 if (bytes_written != static_cast<ssize_t>(request.body.size())) // in case body 3imla9
@@ -94,7 +93,7 @@ bool CGI::start(State &state)
             state.pipe_in[1] = -1;
         }
     }
-    std::cout << "Started CGI process " << state.pid << " for client " << state.client_fd << std::endl;
+    // std::cout << "Started CGI process " << state.pid << " for client " << state.client_fd << std::endl;
     return true;
 }
 void CGI::childProcess(int pipe_in[2], int pipe_out[2], int pipe_err[2])

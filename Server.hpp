@@ -47,7 +47,7 @@ class Server : public Webserv
             std::string temporary_body;
             std::string body_buffer; 
             std::string to_write;
-            char buffer[61440];
+            char buffer[60000];
             struct timeval start_time;
             Request request;
             bool keep_alive;
@@ -63,6 +63,7 @@ class Server : public Webserv
         bool shutdownFlag;
         std::vector<int> fileFdstoClose;
 
+        bool one_read_case(int client_fd);
         std::vector<std::string> get_bodyheaders_Lines(const std::string req);
         std::string simplifyPath(std::string path);
         void checkTimeoutClients(int epoll_fd);

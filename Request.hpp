@@ -14,6 +14,7 @@ struct Request
     std::map<std::string, std::string> headers;
     bool keep_alive;
     bool is_uri_dir;
+    bool is_uri_reg;
     std::string body;
     std::map<std::string, std::string> body_headers;
     std::string real_body;
