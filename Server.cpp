@@ -450,7 +450,6 @@ std::string Server::readRequest(int epoll_fd, int client_fd)
                         client.keep_alive = client.request.keep_alive;
                         return "";
                     }
-                    // Handle CGI scripts for POST
                     if (stat(toSearch.c_str(), &st) == -1)
                     {
                         std::string response = buildResponse(buildErrorPage(404), ".html", 404, false, "", client.request.keep_alive);
@@ -460,10 +459,10 @@ std::string Server::readRequest(int epoll_fd, int client_fd)
                         client.keep_alive = client.request.keep_alive;
                         return "";
                     }
-                    // is regular added here zakaria
-                    if (S_ISREG(st.st_mode))
+                    if (S_ISREG(st.st_mode)) {
                         client.request.is_uri_reg = true;
-                    /////////////////////////////////
+                        goto cgi;
+                    }
                     else if (S_ISDIR(st.st_mode))
                         client.request.is_uri_dir = true;
                     else
@@ -513,7 +512,7 @@ std::string Server::readRequest(int epoll_fd, int client_fd)
                         return "";
                     }
                     size_t multipart_pos = client.request.headers["content-type"].find("multipart/form-data;");
-                    if (multipart_pos == std::string::npos && !client.request.is_uri_reg)
+                    if (multipart_pos == std::string::npos)
                     {
                         std::string response = buildResponse(buildErrorPage(400), ".html", 400, false, "", client.request.keep_alive);
                         sendResponse(client_fd, response, client.request.keep_alive);
@@ -521,9 +520,6 @@ std::string Server::readRequest(int epoll_fd, int client_fd)
                         client.should_ignore = true;
                         client.keep_alive = client.request.keep_alive;
                         return "";
-                    }
-                    if (client.request.is_uri_reg) {
-                        goto cgi;
                     }
                     size_t boundary_pos = client.request.headers["content-type"].find("boundary=");
                     if (boundary_pos == std::string::npos)
@@ -1447,7 +1443,6 @@ bool Server::serveClient(int client_fd, Request request)
                 }
                 else if (S_ISREG(st.st_mode))
                 {
-                    std::cerr << "to search: " << toSearch.c_str() << std::endl;
                     if (access(toSearch.c_str(), R_OK) == 0)
                     {
                         std::string ext = getExtension(toSearch);
