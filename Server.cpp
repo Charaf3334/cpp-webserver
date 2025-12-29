@@ -1215,44 +1215,41 @@ std::string Server::buildErrorPage(int code)
         "<head>\n"
         "    <meta charset=\"UTF-8\">\n"
         "    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n"
-        "    <title>" +
-        tostring(code) + std::string(" ") + status_codes[code] + "</title>\n"
-                                                                 "    <style>\n"
-                                                                 "        body {\n"
-                                                                 "            display: flex;\n"
-                                                                 "            flex-direction: column;\n"
-                                                                 "            justify-content: center;\n"
-                                                                 "            align-items: center;\n"
-                                                                 "            height: 100vh;\n"
-                                                                 "            margin: 0;\n"
-                                                                 "            font-family: Arial, sans-serif;\n"
-                                                                 "            background-color: #f8f8f8;\n"
-                                                                 "            color: #333;\n"
-                                                                 "        }\n"
-                                                                 "        h1 {\n"
-                                                                 "            font-size: 6em;\n"
-                                                                 "            margin: 0;\n"
-                                                                 "        }\n"
-                                                                 "        p {\n"
-                                                                 "            font-size: 1.5em;\n"
-                                                                 "        }\n"
-                                                                 "        a {\n"
-                                                                 "            margin-top: 20px;\n"
-                                                                 "            text-decoration: none;\n"
-                                                                 "            color: #007BFF;\n"
-                                                                 "        }\n"
-                                                                 "        a:hover {\n"
-                                                                 "            text-decoration: underline;\n"
-                                                                 "        }\n"
-                                                                 "    </style>\n"
-                                                                 "</head>\n"
-                                                                 "<body>\n"
-                                                                 "    <h1>" +
-        tostring(code) + "</h1>\n"
-                         "    <p>" +
-        status_codes[code] + "</p>\n"
-                             "</body>\n"
-                             "</html>\n";
+        "    <title>" + tostring(code) + std::string(" ") + status_codes[code] + "</title>\n"
+        "    <style>\n"
+        "        body {\n"
+        "            display: flex;\n"
+        "            flex-direction: column;\n"
+        "            justify-content: center;\n"
+        "            align-items: center;\n"
+        "            height: 100vh;\n"
+        "            margin: 0;\n"
+        "            font-family: Arial, sans-serif;\n"
+        "            background-color: #f8f8f8;\n"
+        "            color: #333;\n"
+        "        }\n"
+        "        h1 {\n"
+        "            font-size: 6em;\n"
+        "            margin: 0;\n"
+        "        }\n"
+        "        p {\n"
+        "            font-size: 1.5em;\n"
+        "        }\n"
+        "        a {\n"
+        "            margin-top: 20px;\n"
+        "            text-decoration: none;\n"
+        "            color: #007BFF;\n"
+        "        }\n"
+        "        a:hover {\n"
+        "            text-decoration: underline;\n"
+        "        }\n"
+        "    </style>\n"
+        "</head>\n"
+        "<body>\n"
+        "    <h1>" + tostring(code) + "</h1>\n"
+        "    <p>" + status_codes[code] + "</p>\n"
+        "</body>\n"
+        "</html>\n";
     return html;
 }
 
@@ -1363,7 +1360,6 @@ bool Server::serveClient(int client_fd, Request request)
     {
         server = *clientfd_to_server[client_fd];
         struct stat st;
-        std::cout << request.uri << std::endl;
 
         if (!isUriExists(request.uri, server, false))
         {
@@ -1803,15 +1799,13 @@ void Server::initialize(void)
                 sockaddr_in client_addr;
                 socklen_t client_len = sizeof(client_addr);
                 int client_fd = accept(fd, reinterpret_cast<sockaddr *>(&client_addr), &client_len);
-                std::cout << "client_fd: " << client_fd << std::endl;
                 if (client_fd != -1)
                 {
                     client_addresses[client_fd] = client_addr; // zakaria
                     char client_ip[INET_ADDRSTRLEN];
                     inet_ntop(AF_INET, &client_addr.sin_addr, client_ip, sizeof(client_ip));
                     int client_port = ntohs(client_addr.sin_port);
-                    std::cout << "New client connected from: " << client_ip << ":" << client_port << std::endl;
-
+                    std::cout << "New client " << client_fd << " connected from: " << client_ip << ":" << client_port << std::endl;
                     setNonBlockingFD(client_fd);
                     this->clientfd_to_server[client_fd] = this->sockfd_to_server[fd];
                     this->client_fds.push_back(client_fd);
@@ -1823,10 +1817,10 @@ void Server::initialize(void)
             }
             else if (events[i].events & EPOLLOUT)
             {
-                bool keep_alive = continueSending(fd); // socket is ready to send more data
+                bool keep_alive = continueSending(fd);
                 if (client_states.find(fd) == client_states.end())
                 {
-                    modifyEpollEvents(epoll_fd, fd, EPOLLIN); // finished sending, switch back to reading only
+                    modifyEpollEvents(epoll_fd, fd, EPOLLIN);
                     if (!keep_alive)
                     {
                         closeClient(epoll_fd, fd, true);
@@ -1843,7 +1837,6 @@ void Server::initialize(void)
                     if (!client_read_state.is_request_full)
                         continue;
                     request_string = client_read_state.headers;
-                    std::cout << "is keep_alive?: " << client_read_state.keep_alive << std::endl;
                     // if (client_read_state.should_ignore)
                     // {
                     //     epoll_event ev;
@@ -1857,16 +1850,13 @@ void Server::initialize(void)
                     closeClient(epoll_fd, fd, true);
                     continue;
                 }
-                // std::cout << request_string << std::endl;
                 Request request;
                 if (!parseRequest(fd, request_string, request))
                 {
                     closeClient(epoll_fd, fd, true);
                     continue;
                 }
-                // std::cout << request.uri << std::endl;
                 bool keep_alive = serveClient(fd, request);
-
                 for (std::map<int, CgiState>::iterator it = cgi_states.begin(); it != cgi_states.end(); it++)
                 {
                     if (it->second.state.client_fd == fd && !it->second.added_to_epoll)
@@ -1879,11 +1869,10 @@ void Server::initialize(void)
                         it->second.added_to_epoll = true;
                     }
                 }
-
                 read_states.erase(fd);
-                if (client_states.find(fd) != client_states.end()) // check if there's pending data to send
+                if (client_states.find(fd) != client_states.end())
                 {
-                    modifyEpollEvents(epoll_fd, fd, EPOLLIN | EPOLLOUT); // couldn't send everything, register for EPOLLOUT
+                    modifyEpollEvents(epoll_fd, fd, EPOLLIN | EPOLLOUT);
                 }
                 else if (!keep_alive)
                     closeClient(epoll_fd, fd, true);
@@ -1921,6 +1910,8 @@ bool Server::setupCGI(Request &request, std::string &script_path, std::string &e
     }
     return false;
 }
+
+
 void Server::handleCGIOutput(int epoll_fd, int pipe_fd)
 {
     CgiState &cgi_state = cgi_states[pipe_fd];
