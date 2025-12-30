@@ -171,6 +171,7 @@ void Webserv::assignStatusCodes(void)
     status_codes[403] = "Forbidden";
     status_codes[404] = "Not Found";
     status_codes[405] = "Method Not Allowed";
+    status_codes[408] = "Request Timeout";
     status_codes[411] = "length required";
     status_codes[413] = "Payload Too Large";
     status_codes[500] = "Internal Server Error";

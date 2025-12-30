@@ -41,6 +41,8 @@ class Server : public Webserv
             int file_fd;
             ssize_t bytes;
             size_t total_bytes_written;
+            size_t buffer_size;
+            size_t loop_bytes_written;
             size_t content_len;
             size_t first_time;
             std::string headers;
