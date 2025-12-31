@@ -1616,6 +1616,7 @@ void Server::initialize(void)
                     if (!client_read_state.is_request_full)
                         continue;
                     request_string = client_read_state.headers;
+                    read_states.erase(fd);
                 }
                 if (request_string.empty())
                 {
@@ -1633,7 +1634,6 @@ void Server::initialize(void)
                 {
                     if (it->second.state.client_fd == fd && !it->second.added_to_epoll)
                     {
-                        // add CGI pipe_out to epoll
                         epoll_event ev;
                         ev.events = EPOLLIN;
                         ev.data.fd = it->first;
@@ -1641,11 +1641,8 @@ void Server::initialize(void)
                         it->second.added_to_epoll = true;
                     }
                 }
-                read_states.erase(fd);
                 if (client_states.find(fd) != client_states.end())
-                {
                     modifyEpollEvents(epoll_fd, fd, EPOLLIN | EPOLLOUT);
-                }
                 else if (!keep_alive)
                     closeClient(epoll_fd, fd, true);
             }
@@ -1659,8 +1656,8 @@ void Server::initialize(void)
     close(epoll_fd);
 }
 
-// cgi block server
 
+// cgi block server
 bool Server::setupCGI(Request &request, std::string &script_path, std::string &extension, int client_fd)
 {
     CGI cgi(this, request, script_path, extension);
