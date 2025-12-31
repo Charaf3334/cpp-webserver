@@ -1605,7 +1605,7 @@ void Server::initialize(void)
                 bool keep_alive = continueSending(fd);
                 if (client_states.find(fd) == client_states.end())
                 {
-                    modifyEpollEvents(epoll_fd, fd, EPOLLIN);
+                    modifyEpollEvents(epoll_fd, fd, EPOLLIN | EPOLLET);
                     if (!keep_alive)
                     {
                         closeClient(epoll_fd, fd, true);
