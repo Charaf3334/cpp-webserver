@@ -1520,7 +1520,13 @@ void Server::initialize(void)
             continue;
         }
         int option = 1;
-        setsockopt(sock_fd, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option));
+        if (setsockopt(sock_fd, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option)) == -1)
+        {
+            std::cerr << "Error: setsockopt failed in socket " << i + 1 << "." << std::endl;
+            countingFailedSockets++;
+            close(sock_fd);
+            continue;
+        }
         sockaddr_in address = infos(servers[i]);
         if (bind(sock_fd, reinterpret_cast<sockaddr *>(&address), sizeof(address)) == -1)
         {
@@ -1541,7 +1547,7 @@ void Server::initialize(void)
         ev.data.fd = sock_fd;
         if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, sock_fd, &ev) == -1)
         {
-            std::cerr << "Error: ctl failed in socket " << i + 1 << "." << std::endl;
+            std::cerr << "Error: epoll_ctl failed in socket " << i + 1 << "." << std::endl;
             countingFailedSockets++;
             close(sock_fd);
             continue;
