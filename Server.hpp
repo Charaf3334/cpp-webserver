@@ -41,15 +41,13 @@ class Server : public Webserv
             int file_fd;
             ssize_t bytes;
             size_t total_bytes_written;
-            size_t buffer_size;
-            size_t loop_bytes_written;
             size_t content_len;
             size_t first_time;
             std::string headers;
             std::string temporary_body;
             std::string body_buffer; 
             std::string to_write;
-            char buffer[60000];
+            char buffer[20480];
             struct timeval start_time;
             Request request;
             bool keep_alive;
@@ -65,7 +63,9 @@ class Server : public Webserv
         bool shutdownFlag;
         std::vector<int> fileFdstoClose;
 
-        bool one_read_case(int client_fd);
+
+        
+        void parse_post_headers(int client_fd);
         std::vector<std::string> get_bodyheaders_Lines(const std::string req);
         std::string simplifyPath(std::string path);
         void checkTimeoutClients(int epoll_fd);
