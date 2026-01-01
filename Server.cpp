@@ -285,10 +285,10 @@ std::string Server::readRequest(int epoll_fd, int client_fd)
                     client.keep_alive = client.request.keep_alive;
                     return "";
                 }
-                // if (S_ISREG(st.st_mode)) {
-                //     client.request.is_uri_reg = true;
-                //     goto cgi;
-                // } 
+                if (S_ISREG(st.st_mode)) {
+                    client.request.is_uri_reg = true;
+                    goto cgi;
+                } 
                 if (S_ISDIR(st.st_mode))
                     client.request.is_uri_dir = true;
                 else
@@ -490,43 +490,43 @@ std::string Server::readRequest(int epoll_fd, int client_fd)
                 close(client.file_fd);
             }
         }
-        // cgi:
-        //     if (client.content_lenght_present && client.is_post && client.request.is_uri_reg)
-        //     {
-        //         if (client.content_len > 60000)
-        //         {
-        //             std::string response = buildResponse(buildErrorPage(413), ".html", 413, false, "", client.request.keep_alive);
-        //             sendResponse(client_fd, response, client.request.keep_alive);
-        //             client.is_request_full = true;
-        //             client.keep_alive = client.request.keep_alive;
-        //             return "";
-        //         }
-        //         else
-        //             client.request.body = client.temporary_body;     
-        //         std::string toSearch = client.request.location.root + client.request.uri;
-        //         std::string ext = getExtension(toSearch);
-        //         if (getLocation(client.request.uri, server).hasCgi && (ext == ".py" || ext == ".php"))
-        //         {
-        //             if (!setupCGI(client.request, toSearch, ext, client_fd))
-        //             {
-        //                 std::string response = buildResponse(buildErrorPage(500), ".html", 500, false, "", client.request.keep_alive);
-        //                 sendResponse(client_fd, response, client.request.keep_alive);
-        //                 client.is_request_full = true;
-        //                 client.keep_alive = client.request.keep_alive;
-        //                 return "";
-        //             }
-        //             client.keep_alive = client.request.keep_alive;
-        //             return "";
-        //         }
-        //         else
-        //         {
-        //             std::string response = buildResponse(buildErrorPage(501), ".html", 501, false, "", client.request.keep_alive);
-        //             sendResponse(client_fd, response, client.request.keep_alive);
-        //             client.is_request_full = true;
-        //             client.keep_alive = client.request.keep_alive;
-        //             return "";
-        //         }
-        //     }
+        cgi:
+            if (client.content_lenght_present && client.is_post && client.request.is_uri_reg)
+            {
+                if (client.content_len > 60000)
+                {
+                    std::string response = buildResponse(buildErrorPage(413), ".html", 413, false, "", client.request.keep_alive);
+                    sendResponse(client_fd, response, client.request.keep_alive);
+                    client.is_request_full = true;
+                    client.keep_alive = client.request.keep_alive;
+                    return "";
+                }
+                else
+                    client.request.body = client.temporary_body;     
+                std::string toSearch = client.request.location.root + client.request.uri;
+                std::string ext = getExtension(toSearch);
+                if (getLocation(client.request.uri, server).hasCgi && (ext == ".py" || ext == ".php"))
+                {
+                    if (!setupCGI(client.request, toSearch, ext, client_fd))
+                    {
+                        std::string response = buildResponse(buildErrorPage(500), ".html", 500, false, "", client.request.keep_alive);
+                        sendResponse(client_fd, response, client.request.keep_alive);
+                        client.is_request_full = true;
+                        client.keep_alive = client.request.keep_alive;
+                        return "";
+                    }
+                    client.keep_alive = client.request.keep_alive;
+                    return "";
+                }
+                else
+                {
+                    std::string response = buildResponse(buildErrorPage(501), ".html", 501, false, "", client.request.keep_alive);
+                    sendResponse(client_fd, response, client.request.keep_alive);
+                    client.is_request_full = true;
+                    client.keep_alive = client.request.keep_alive;
+                    return "";
+                }
+            }
         if (client.is_post && !client.content_lenght_present)
         {
             std::string response = buildResponse(buildErrorPage(411), ".html", 411, false, "", false);
@@ -963,10 +963,15 @@ std::string dirlisntening_gen(std::string request_uri, std::string path, int &co
     if (!directory)
     {
         code = 403;
-        return "<html><body><h1>Forbidden</h1></body></html>";
+        return "<h1 style=\"font-family: sans-serif; color: darkred;\">Forbidden</h1>";
     }
+
     std::string html_text;
-    html_text += "<html>\n<head><title>Index of " + request_uri + "</title></head>\n<body>\n<h1>Index of " + request_uri + "</h1>\n<ul>\n";
+
+    html_text += "<div style=\"font-family: sans-serif; max-width: 800px; margin: 20px auto;\">";
+    html_text += "<h1 style=\"text-align: center; color: #333;\">Index of " + request_uri + "</h1>\n";
+    html_text += "<ul style=\"list-style-type: none; padding: 0;\">\n";
+
     struct dirent *entry;
     while ((entry = readdir(directory)) != NULL)
     {
@@ -974,15 +979,24 @@ std::string dirlisntening_gen(std::string request_uri, std::string path, int &co
         std::string d_name = path + "/" + name;
         if (d_name == "." || d_name == "..")
             continue;
+
+        std::cout << request_uri + name  << std::endl;
+
         struct stat st;
         stat(d_name.c_str(), &st);
-        if (S_ISDIR(st.st_mode))
-        {
-            name += "/";
+        if (S_ISDIR(st.st_mode)) {
+            name += "/"; 
+            html_text += "<li style=\"margin: 6px 0; display: flex; justify-content: space-between; align-items: center;\">";
+            html_text += "<a href=\"" + request_uri + name + "\" style=\"text-decoration: none; color: #0066cc; font-weight: bold;\">" + name + "</a>";
+            html_text += "</li>\n";
+        } else {
+            html_text += "<li style=\"margin: 6px 0; display: flex; justify-content: space-between; align-items: center;\">";
+            html_text += "<a href=\"" + request_uri + name + "\" style=\"text-decoration: none; color: #0066cc; font-weight: bold;\">" + name + "</a>";
+            html_text += "<button style=\"color:white; background-color:red; padding:4px 8px; border:none; border-radius:4px; cursor:pointer;\" onclick=\"fetch('" + request_uri + name + "', {method: 'DELETE'}).then(r => location.reload());\">Delete</button>";
+            html_text += "</li>\n";
         }
-        html_text += " <li><a href=" + request_uri + name + ">" + name + "</a></li>\n";
     }
-    html_text += "</ul>\n</body>\n</html>\n";
+    html_text += "</ul>\n</div>\n";
     closedir(directory);
     code = 200;
     return html_text;
