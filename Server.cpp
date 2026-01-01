@@ -22,6 +22,7 @@ Server &Server::operator=(const Server &theOtherObject)
 
 Server::~Server()
 {
+    std::cout << "Server destructor called\n";
 }
 
 bool Server::setNonBlockingFD(const int fd) const
@@ -156,6 +157,7 @@ std::string Server::readRequest(int epoll_fd, int client_fd)
 
     if (!client.has_start_time)
     {
+        client.file_fd = -1;
         client.total_bytes_written = 0;
         client.content_len = 0;
         client.is_request_full = false;
@@ -268,6 +270,7 @@ std::string Server::readRequest(int epoll_fd, int client_fd)
                     return "";
                 }
                 std::string toSearch = client.request.location.root + client.request.uri;
+                
                 size_t pos = simplifyPath(toSearch).find(client.request.location.root);
                 if (pos == std::string::npos || pos != 0)
                 {
@@ -406,6 +409,8 @@ std::string Server::readRequest(int epoll_fd, int client_fd)
                 std::string upload_dir = client.request.location.upload_dir + "/" + "Client_" + tostring(client_fd);
                 mkdir(upload_dir.c_str(), 0777);
                 std::string upload_file = upload_dir + "/" + client.request.bodyfile_name;
+                if (client.file_fd != -1)
+                    close(client.file_fd);
                 client.file_fd = open(upload_file.c_str(), O_CREAT | O_WRONLY | O_TRUNC, 0644);
                 if (client.file_fd == -1)
                 {
@@ -461,14 +466,16 @@ std::string Server::readRequest(int epoll_fd, int client_fd)
                         client.to_write = client.body_buffer.substr(0, r_pos);
                 }
             }
-            int written = write(client.file_fd, client.to_write.c_str(), client.to_write.size());
+            ssize_t written = write(client.file_fd, client.to_write.c_str(), client.to_write.size());
             if (written < (int)client.to_write.size())
             {
                 if (written == -1)
                 {
+                    perror("write");
                     std::string response = buildResponse(buildErrorPage(500), ".html", 500, false, "", client.request.keep_alive);
                     sendResponse(client_fd, response, client.request.keep_alive);
                     close(client.file_fd);
+                    client.file_fd = -1;
                     client.is_request_full = true;
                     client.keep_alive = client.request.keep_alive;
                     return "";
@@ -480,6 +487,7 @@ std::string Server::readRequest(int epoll_fd, int client_fd)
                         std::string response = buildResponse(buildErrorPage(500), ".html", 500, false, "", client.request.keep_alive);
                         sendResponse(client_fd, response, client.request.keep_alive);
                         close(client.file_fd);
+                        client.file_fd = -1;
                         client.is_request_full = true;
                         client.keep_alive = client.request.keep_alive;
                         return "";
@@ -492,10 +500,12 @@ std::string Server::readRequest(int epoll_fd, int client_fd)
                 if (!client.request.body_headers_done)
                 {
                     close(client.file_fd);
+                    client.file_fd = -1;
                     client.boundary_found = false;
                     continue;
                 }
                 close(client.file_fd);
+                client.file_fd = -1;
             }
         }
         cgi:
@@ -588,7 +598,7 @@ std::string Server::readRequest(int epoll_fd, int client_fd)
                     client.keep_alive = client.request.keep_alive;
                     client.temporary_body = "";
                     client.is_request_full = true;
-                    continue;
+                    break;
                 }
             }
             else if (client.total_bytes_written < client.content_len) // tibarike
@@ -980,8 +990,6 @@ std::string dirlisntening_gen(std::string request_uri, std::string path, int &co
         std::string d_name = path + "/" + name;
         if (d_name == "." || d_name == "..")
             continue;
-
-        std::cout << request_uri + name  << std::endl;
 
         struct stat st;
         stat(d_name.c_str(), &st);
@@ -1711,42 +1719,31 @@ void Server::handleCGIOutput(int epoll_fd, int pipe_fd)
 
     if (!more_data || cgi_state.state.process_complete)
     {
-        std::cout << "[DEBUG] handleCGIOutput: pipe_fd=" << pipe_fd
-                  << ", client_fd=" << cgi_state.state.client_fd
-                  << ", output_size=" << cgi_state.state.output.size()
-                  << ", headers_complete=" << cgi_state.state.headers_complete
-                  << ", more_data=" << more_data
-                  << ", process_complete=" << cgi_state.state.process_complete
-                  << std::endl;
+        // std::cout << "[DEBUG] handleCGIOutput: pipe_fd=" << pipe_fd
+        //           << ", client_fd=" << cgi_state.state.client_fd
+        //           << ", output_size=" << cgi_state.state.output.size()
+        //           << ", headers_complete=" << cgi_state.state.headers_complete
+        //           << ", more_data=" << more_data
+        //           << ", process_complete=" << cgi_state.state.process_complete
+        //           << std::endl;
 
         // Only send response once
         if (!cgi_state.state.response_sent_to_client && !cgi_state.state.output.empty())
         {
             std::string response;
             if (cgi_state.state.syntax_error)
-            {
                 response = CGI::buildErrorResponse(this, cgi_state.state);
-            }
             else
-            {
                 response = CGI::buildResponseFromState(this, cgi_state.state, cgi_state.state.request.keep_alive);
-            }
 
-            std::cout << "response length (handleCGIOutput): " << response.size() << std::endl;
-
-            cgi_state.state.response_sent_to_client = true; // Mark as sent BEFORE sending
+            cgi_state.state.response_sent_to_client = true; // response_sent_to_client true BEFORE sending
 
             bool fully_sent = sendResponse(cgi_state.state.client_fd, response, cgi_state.state.request.keep_alive);
 
-            if (client_states.find(cgi_state.state.client_fd) != client_states.end())
-            {
-                // if data is pending, register for EPOLLOUT to continue sending
+            if (client_states.find(cgi_state.state.client_fd) != client_states.end()) // if data is pending, register for EPOLLOUT to continue sending
                 modifyEpollEvents(epoll_fd, cgi_state.state.client_fd, EPOLLIN | EPOLLOUT);
-            }
             else if (!fully_sent || !cgi_state.state.request.keep_alive)
-            {
                 closeClient(epoll_fd, cgi_state.state.client_fd, true);
-            }
             // If fully_sent && keep_alive, client stays open for next request
         }
         else if (cgi_state.state.output.empty())
@@ -1756,9 +1753,7 @@ void Server::handleCGIOutput(int epoll_fd, int pipe_fd)
         }
 
         if (cgi_state.state.process_complete)
-        {
             cleanupCGI(epoll_fd, pipe_fd, true);
-        }
     }
 }
 

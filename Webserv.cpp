@@ -498,7 +498,7 @@ void Webserv::mergePaths(void)
             }
             if (servers[i].locations[j].upload_dir[0] == '.')
                 servers[i].locations[j].upload_dir = servers[i].locations[j].upload_dir.substr(1);
-            servers[i].locations[j].upload_dir = rooot + servers[i].locations[j].upload_dir;
+            servers[i].locations[j].upload_dir = rooot + servers[i].locations[j].path + servers[i].locations[j].upload_dir;
         }
     }
 }

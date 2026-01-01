@@ -57,7 +57,7 @@ bool CGI::start(State &state)
     if (cgi_path.empty())
         return false;
 
-    if (pipe(state.pipe_out) == -1 || pipe(state.pipe_err) == -1 || (request.method == "POST" && pipe(state.pipe_in) == -1)) // delete request
+    if (pipe(state.pipe_out) == -1 || pipe(state.pipe_err) == -1 || (request.method == "POST" && pipe(state.pipe_in) == -1))
     {
         perror("pipe");
         cleanupPipes(state.pipe_in, state.pipe_out, state.pipe_err);
@@ -102,11 +102,6 @@ void CGI::childProcess(int pipe_in[2], int pipe_out[2], int pipe_err[2])
     close(pipe_err[0]);
     if (request.method == "POST")
         close(pipe_in[1]);
-
-    // int flags = fcntl(pipe_out[1], F_GETFL, 0);
-    // fcntl(pipe_out[1], F_SETFL, flags | O_NONBLOCK);
-    // flags = fcntl(pipe_err[1], F_GETFL, 0);
-    // fcntl(pipe_err[1], F_SETFL, flags | O_NONBLOCK);
     
     dup2(pipe_out[1], STDOUT_FILENO);
     dup2(pipe_err[1], STDERR_FILENO);
