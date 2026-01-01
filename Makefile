@@ -6,8 +6,6 @@ OBJS      = $(SRCS:.cpp=.o)
 NAME      = webserv
 
 all: $(NAME)
-# make clean
-# clear
 
 $(NAME): $(OBJS)
 	$(CPP) $(FLAGS) $(OBJS) -o $(NAME)

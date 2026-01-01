@@ -22,7 +22,7 @@ Server &Server::operator=(const Server &theOtherObject)
 
 Server::~Server()
 {
-    std::cout << "Server destructor called\n";
+    
 }
 
 bool Server::setNonBlockingFD(const int fd) const
@@ -194,7 +194,7 @@ std::string Server::readRequest(int epoll_fd, int client_fd)
         if (bytes == 0)
         {
             client.is_request_full = true;
-            std::cout << "Client disconnected" << std::endl;
+            std::cout << "Client " << client_fd << " disconnected" << std::endl;
             return client.headers;
         }
         if (!client.isParsed)
@@ -1462,7 +1462,7 @@ bool Server::continueSending(int client_fd)
             {
                 close(state.file_fd);
                 client_states.erase(client_fd);
-                return false;
+                return true;
             }
             state.headers_sent += sent;
             if (state.headers_sent >= state.response_headers.length())
@@ -1477,16 +1477,15 @@ bool Server::continueSending(int client_fd)
             if (state.file_offset >= state.file_size)
             {
                 close(state.file_fd);
-                bool keep_alive = state.keep_alive;
                 client_states.erase(client_fd);
-                return keep_alive;
+                return true;
             }
             ssize_t bytes_read = read(state.file_fd, state.buffer, sizeof(state.buffer));
             if (bytes_read <= 0)
             {
                 close(state.file_fd);
                 client_states.erase(client_fd);
-                return false;
+                return true;
             }
             state.buffer_offset = 0;
             state.buffer_len = bytes_read;
@@ -1498,7 +1497,7 @@ bool Server::continueSending(int client_fd)
         {
             close(state.file_fd);
             client_states.erase(client_fd);
-            return false;
+            return true;
         }
         state.buffer_offset += sent;
         state.file_offset += sent;
@@ -1510,12 +1509,11 @@ bool Server::continueSending(int client_fd)
         if (sent == -1)
             return false;
         if (sent == 0)
-            return false;
+            return true;
         state.bytes_sent += sent;
     }
-    bool keep_alive = state.keep_alive;
     client_states.erase(client_fd);
-    return keep_alive;
+    return true;
 }
 
 void Server::initialize(void)
@@ -1625,11 +1623,12 @@ void Server::initialize(void)
             }
             else if (events[i].events & EPOLLOUT)
             {
-                bool keep_alive = continueSending(fd);
+                bool sending_done = continueSending(fd);
                 if (client_states.find(fd) == client_states.end())
                 {
                     modifyEpollEvents(epoll_fd, fd, EPOLLIN | EPOLLET);
-                    if (!keep_alive)
+                    bool keep_alive = clientfd_to_request[fd]->keep_alive;
+                    if (!keep_alive && sending_done)
                     {
                         closeClient(epoll_fd, fd, true);
                         continue;
@@ -1658,7 +1657,8 @@ void Server::initialize(void)
                     closeClient(epoll_fd, fd, true);
                     continue;
                 }
-                bool keep_alive = serveClient(fd, request);
+                clientfd_to_request[fd] = &request;
+                bool sending_done = serveClient(fd, request);
                 for (std::map<int, CgiState>::iterator it = cgi_states.begin(); it != cgi_states.end(); it++)
                 {
                     if (it->second.state.client_fd == fd && !it->second.added_to_epoll)
@@ -1670,9 +1670,9 @@ void Server::initialize(void)
                         it->second.added_to_epoll = true;
                     }
                 }
-                if (client_states.find(fd) != client_states.end())
+                if (!sending_done)
                     modifyEpollEvents(epoll_fd, fd, EPOLLIN | EPOLLOUT);
-                else if (!keep_alive)
+                else if (!request.keep_alive && sending_done)
                     closeClient(epoll_fd, fd, true);
             }
         }

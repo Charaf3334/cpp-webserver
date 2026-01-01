@@ -170,15 +170,15 @@ void Webserv::assignStatusCodes(void)
     status_codes[401] = "Unauthorized";
     status_codes[403] = "Forbidden";
     status_codes[404] = "Not Found";
-    status_codes[405] = "Method Not Allowed";
-    status_codes[408] = "Request Timeout";
-    status_codes[411] = "length required";
-    status_codes[413] = "Payload Too Large";
+    status_codes[405] = "Method Not Allowed"; // HTTP/1.1
+    status_codes[408] = "Request Timeout"; // HTTP/1.1
+    status_codes[411] = "length required"; // HTTP/1.1
+    status_codes[413] = "Payload Too Large"; // HTTP/1.1
     status_codes[500] = "Internal Server Error";
     status_codes[501] = "Not Implemented";
     status_codes[502] = "Bad Gateway";
     status_codes[503] = "Service Unavailable";
-    status_codes[504] = "Gateway Timeout";
+    status_codes[504] = "Gateway Timeout"; // HTTP/1.1
 }
 
 void Webserv::assignContentType(void)
@@ -342,118 +342,109 @@ void Webserv::read_file(void)
     bool sawServer = false;
     for (size_t i = 0; i < tokens.size(); i++)
     {
-        if (tokens[i] == "http")
+        bool has_body_size = false;
+        bool hasRoot = false;
+        http_root = "";
+        while (i < tokens.size() && tokens[i] != "}" && tokens[i] != "server")
         {
-            i++;
-            if (tokens[i] != "{")
-                throw std::runtime_error("Error: Expected '{' after http.");
-            i++;
-            bool has_body_size = false;
-            bool hasRoot = false;
-            http_root = "";
-            while (i < tokens.size() && tokens[i] != "}" && tokens[i] != "server")
+            if (tokens[i] == "error_page")
             {
-                if (tokens[i] == "error_page")
-                {
-                    i++;
-                    if (tokens[i] == ";")
-                        throw std::runtime_error("Error: No error pages provided.");
-                    std::vector<std::string> error_codes;
-                    std::string error_path;
-                    while (i < tokens.size() && tokens[i] != ";" && tokens[i] != "}" && tokens[i] != "server")
-                    {
-                        if (isValidStatusCode(tokens[i]))
-                        {
-                            size_t code = atoll(tokens[i].c_str());
-                            if (code < 400 || code > 599)
-                                throw std::runtime_error("Error: Status code " + tokens[i] + " must be between 400 and 599");
-                            if (!isCodeInMap(code))
-                                throw std::runtime_error("Error: Not a valid http status code.");
-                            error_codes.push_back(tokens[i]);
-                            i++;
-                        }
-                        else
-                        {
-                            error_path = tokens[i];
-                            if (!checkRoot(error_path))
-                                throw std::runtime_error("Error: " + error_path + " not a valid path for error_page.");
-                            i++;
-                            if (tokens[i] != ";")
-                                throw std::runtime_error("Error: Expected ';' after error_page.");
-                            break;
-                        }
-                    }
-                    if (error_codes.empty())
-                        throw std::runtime_error("Error: No error codes provided for error_page.");
-                    if (error_path.empty())
-                        throw std::runtime_error("Error: No path provided for error_page.");
-                    for (size_t j = 0; j < error_codes.size() && error_pages[error_codes[j]].empty(); j++)
-                        error_pages[error_codes[j]] = error_path;
-                    if (i < tokens.size() && tokens[i] == ";")
-                        i++;
-                    else if (i < tokens.size() && tokens[i] != "}" && tokens[i] != "server")
-                        throw std::runtime_error("Error: Expected ';' after error_page.");
-                }
-                else if (tokens[i] == "client_max_body_size")
-                {
-                    if (has_body_size)
-                        throw std::runtime_error("Error: Duplicate client_max_body_size directive.");
-                    i++;
-                    if (tokens[i] == ";")
-                        throw std::runtime_error("Error: Empty client_max_body_size.");
-                    std::string body_size_value = tokens[i];
-                    i++;
-                    if (tokens[i] != ";")
-                        throw std::runtime_error("Error: Expected ';' after client_max_body_size.");
-                    if (!checkMaxBodySize(body_size_value) || atoll(body_size_value.c_str()) <= 0)
-                        throw std::runtime_error("Error: Invalid value for client_max_body_size.");
-                    client_max_body_size = atoll(body_size_value.c_str());
-                    i++;
-                    has_body_size = true;
-                }
-                else if (tokens[i] == "root")
-                {
-                    if (hasRoot)
-                        throw std::runtime_error("Error: Duplicate root directive inside http block.");
-                    hasRoot = true;
-                    i++;
-                    if (tokens[i] == ";")
-                        throw std::runtime_error("Error: Empty root directive inside http block.");
-                    if (!checkPath(tokens[i]))
-                        throw std::runtime_error("Error: Invalid path for root directive inside http block.");
-                    http_root = tokens[i];
-                    i++;
-                    if (tokens[i] != ";")
-                        throw std::runtime_error("Error: Expected ';' after root path inside http block.");
-                    i++;
-                }
-                else
-                    throw std::runtime_error("Error: Unexpected token in http block: " + tokens[i]);
-            }
-            if (!has_body_size)
-                client_max_body_size = 1024;
-            while (i < tokens.size() && tokens[i] != "}")
-            {
-                if (tokens[i] == "server")
-                {
-                    sawServer = true;
-                    i++;
-                    if (i >= tokens.size() || tokens[i] != "{")
-                        throw std::runtime_error("Error: Expected '{' after server.");
-                    i++;
-                    Server s = parseServer(i);
-                    this->servers.push_back(s);
-                }
-                else if (tokens[i] == ";")
-                    i++;
-                else
-                    throw std::runtime_error("Error: Server block not found or unexpected token: " + tokens[i]);
-            }
-            if (i < tokens.size() && tokens[i] == "}")
                 i++;
+                if (tokens[i] == ";")
+                    throw std::runtime_error("Error: No error pages provided.");
+                std::vector<std::string> error_codes;
+                std::string error_path;
+                while (i < tokens.size() && tokens[i] != ";" && tokens[i] != "}" && tokens[i] != "server")
+                {
+                    if (isValidStatusCode(tokens[i]))
+                    {
+                        size_t code = atoll(tokens[i].c_str());
+                        if (code < 400 || code > 599)
+                            throw std::runtime_error("Error: Status code " + tokens[i] + " must be between 400 and 599");
+                        if (!isCodeInMap(code))
+                            throw std::runtime_error("Error: Not a valid http status code.");
+                        error_codes.push_back(tokens[i]);
+                        i++;
+                    }
+                    else
+                    {
+                        error_path = tokens[i];
+                        if (!checkRoot(error_path))
+                            throw std::runtime_error("Error: " + error_path + " not a valid path for error_page.");
+                        i++;
+                        if (tokens[i] != ";")
+                            throw std::runtime_error("Error: Expected ';' after error_page.");
+                        break;
+                    }
+                }
+                if (error_codes.empty())
+                    throw std::runtime_error("Error: No error codes provided for error_page.");
+                if (error_path.empty())
+                    throw std::runtime_error("Error: No path provided for error_page.");
+                for (size_t j = 0; j < error_codes.size() && error_pages[error_codes[j]].empty(); j++)
+                    error_pages[error_codes[j]] = error_path;
+                if (i < tokens.size() && tokens[i] == ";")
+                    i++;
+                else if (i < tokens.size() && tokens[i] != "}" && tokens[i] != "server")
+                    throw std::runtime_error("Error: Expected ';' after error_page.");
+            }
+            else if (tokens[i] == "client_max_body_size")
+            {
+                if (has_body_size)
+                    throw std::runtime_error("Error: Duplicate client_max_body_size directive.");
+                i++;
+                if (tokens[i] == ";")
+                    throw std::runtime_error("Error: Empty client_max_body_size.");
+                std::string body_size_value = tokens[i];
+                i++;
+                if (tokens[i] != ";")
+                    throw std::runtime_error("Error: Expected ';' after client_max_body_size.");
+                if (!checkMaxBodySize(body_size_value) || atoll(body_size_value.c_str()) <= 0)
+                    throw std::runtime_error("Error: Invalid value for client_max_body_size.");
+                client_max_body_size = atoll(body_size_value.c_str());
+                i++;
+                has_body_size = true;
+            }
+            else if (tokens[i] == "root")
+            {
+                if (hasRoot)
+                    throw std::runtime_error("Error: Duplicate root directive inside http block.");
+                hasRoot = true;
+                i++;
+                if (tokens[i] == ";")
+                    throw std::runtime_error("Error: Empty root directive inside http block.");
+                if (!checkPath(tokens[i]))
+                    throw std::runtime_error("Error: Invalid path for root directive inside http block.");
+                http_root = tokens[i];
+                i++;
+                if (tokens[i] != ";")
+                    throw std::runtime_error("Error: Expected ';' after root path inside http block.");
+                i++;
+            }
+            else
+                throw std::runtime_error("Error: Unexpected token in http block: " + tokens[i]);
         }
-        else
-            throw std::runtime_error("Error: Http context not found.");
+        if (!has_body_size)
+            client_max_body_size = 1024;
+        while (i < tokens.size() && tokens[i] != "}")
+        {
+            if (tokens[i] == "server")
+            {
+                sawServer = true;
+                i++;
+                if (i >= tokens.size() || tokens[i] != "{")
+                    throw std::runtime_error("Error: Expected '{' after server.");
+                i++;
+                Server s = parseServer(i);
+                this->servers.push_back(s);
+            }
+            else if (tokens[i] == ";")
+                i++;
+            else
+                throw std::runtime_error("Error: Server block not found or unexpected token: " + tokens[i]);
+        }
+        if (i < tokens.size() && tokens[i] == "}")
+            i++;
     }
     if (!sawServer)
         throw std::runtime_error("Error: Server not found.");
