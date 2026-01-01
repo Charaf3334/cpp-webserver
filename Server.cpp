@@ -658,12 +658,24 @@ bool Server::parse_path(std::string &path)
         return false;
     if (path.find("//") != std::string::npos)
         return false;
-    for (size_t i = 0; i < path.length(); i++)
-    {
-        if (!isalnum(path[i]) && path[i] != '/' && path[i] != '_' && path[i] != '-' && path[i] != '.' && path[i] != '&' && path[i] != '=' && path[i] != '?')
-            return false;
-    }
+    // for (size_t i = 0; i < path.length(); i++)
+    // {
+    //     if (!isalnum(path[i]) && path[i] != '/' && path[i] != '_' && path[i] != '-' && path[i] != '.' && path[i] != '&' && path[i] != '=' && path[i] != '?')
+    //         return false;
+    // }
     return true;
+}
+
+std::string Server::decodeURI(std::string uri)
+{
+    size_t pos = uri.find("%20");
+    while (pos != std::string::npos)
+    {
+        uri.erase(pos, 3);
+        uri.insert(pos, std::string(1, ' '));
+        pos = uri.find("%20");
+    }
+    return uri;
 }
 
 bool Server::parse_methode(std::string *words, int &error_status, Request &request)
@@ -714,6 +726,14 @@ bool Server::parse_methode(std::string *words, int &error_status, Request &reque
     }
     request.method = words[0];
     request.uri = words[1];
+    if (request.uri.find("%20") != std::string::npos)
+        request.uri = decodeURI(request.uri);
+    size_t pos = request.uri.find("?");
+    if (pos != std::string::npos)
+    {
+        request.queries = request.uri.substr(pos);
+        request.uri = request.uri.substr(0, pos);
+    }
     request.http_version = words[2];
     return true;
 }

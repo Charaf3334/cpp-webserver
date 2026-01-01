@@ -64,6 +64,7 @@ class Server : public Webserv
         bool shutdownFlag;
         std::vector<int> fileFdstoClose;
 
+        std::string decodeURI(std::string uri);
         std::vector<std::string> get_bodyheaders_Lines(const std::string req);
         std::string simplifyPath(std::string path);
         void checkTimeoutClients(int epoll_fd);

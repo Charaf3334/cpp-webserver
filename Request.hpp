@@ -25,6 +25,7 @@ struct Request
     bool take_boundry_check_upload_dir;
     bool body_headers_done;
     Webserv::Location location;
+    std::string queries;
 };
 
 #endif
