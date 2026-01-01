@@ -433,6 +433,14 @@ std::string Server::readRequest(int epoll_fd, int client_fd)
             {
                 client.to_write = client.body_buffer.substr(0, end_boundry_pos);
                 client.temporary_body = client.body_buffer.substr(end_boundry_pos + client.request.body_boundary.size() + 6);
+                if (!client.temporary_body.empty())
+                {
+                    std::string response = buildResponse(buildErrorPage(400), ".html", 400, false, "", client.request.keep_alive);
+                    sendResponse(client_fd, response, client.request.keep_alive);
+                    client.is_request_full = true;
+                    client.keep_alive = client.request.keep_alive;
+                    return "";
+                }
                 client.total_bytes_written += client.request.body_boundary.size() + 6;
                 client.boundary_found = true;
             }
@@ -501,8 +509,23 @@ std::string Server::readRequest(int epoll_fd, int client_fd)
                     client.keep_alive = client.request.keep_alive;
                     return "";
                 }
+                
+                if (bytes == -1)
+                    client.request.body = client.temporary_body;
                 else
-                    client.request.body = client.temporary_body;     
+                    client.request.body = client.temporary_body + std::string(client.buffer, bytes);
+                client.temporary_body = "";
+
+                client.total_bytes_written += client.request.body.size();
+                
+                // tibarike 
+                if (client.total_bytes_written < client.content_len)
+                {
+                    client.temporary_body = client.request.body;
+                    continue;
+                }
+                
+                // process cgi, body is finished
                 std::string toSearch = client.request.location.root + client.request.uri;
                 std::string ext = getExtension(toSearch);
                 if (getLocation(client.request.uri, server).hasCgi && (ext == ".py" || ext == ".php"))
@@ -515,6 +538,7 @@ std::string Server::readRequest(int epoll_fd, int client_fd)
                         client.keep_alive = client.request.keep_alive;
                         return "";
                     }
+                    client.is_request_full = true;
                     client.keep_alive = client.request.keep_alive;
                     return "";
                 }
@@ -529,33 +553,10 @@ std::string Server::readRequest(int epoll_fd, int client_fd)
             }
         if (client.is_post && !client.content_lenght_present)
         {
-            std::string response = buildResponse(buildErrorPage(411), ".html", 411, false, "", false);
+            std::string response = buildResponse(buildErrorPage(400), ".html", 400, false, "", false);
             sendResponse(client_fd, response, false);
             client.is_request_full = true;
             return "";
-        }
-        if (!client.is_post && client.content_lenght_present)
-        {
-            client.temporary_body = "";
-            client.temporary_file_fd = open("/home/tibarike/goinfre/trash", O_CREAT | O_WRONLY | O_TRUNC, 0644);
-            if (client.temporary_file_fd < 0)
-            {
-                std::string response = buildResponse(buildErrorPage(500), ".html", 500, false, "", false);
-                sendResponse(client_fd, response, false);
-                client.is_request_full = true;
-                return "";
-            }
-            ssize_t written = write(client.temporary_file_fd, client.buffer, bytes);
-            if (written == -1)
-            {
-                close(client.temporary_file_fd);
-                std::string response = buildResponse(buildErrorPage(500), ".html", 500, false, "", false);
-                sendResponse(client_fd, response, false);
-                client.is_request_full = true;
-                return "";
-            }
-            close(client.temporary_file_fd);
-            client.total_bytes_written += written + 1;
         }
             //===================================================POST END===============================================================
         if (client.isParsed)
@@ -590,7 +591,7 @@ std::string Server::readRequest(int epoll_fd, int client_fd)
                     continue;
                 }
             }
-            else if (client.total_bytes_written < client.content_len)
+            else if (client.total_bytes_written < client.content_len) // tibarike
                 continue;
         }
     }
@@ -1575,7 +1576,7 @@ void Server::initialize(void)
     {
         int n = epoll_wait(epoll_fd, events, MAX_EVENTS, 1000);
         // checkTimeoutClients(epoll_fd);
-        // checkTimeoutCGI(epoll_fd);
+        checkTimeoutCGI(epoll_fd);
         for (int i = 0; i < n; i++)
         {
             int fd = events[i].data.fd;
@@ -1710,13 +1711,13 @@ void Server::handleCGIOutput(int epoll_fd, int pipe_fd)
 
     if (!more_data || cgi_state.state.process_complete)
     {
-        // std::cout << "[DEBUG] handleCGIOutput: pipe_fd=" << pipe_fd
-        //           << ", client_fd=" << cgi_state.state.client_fd
-        //           << ", output_size=" << cgi_state.state.output.size()
-        //           << ", headers_complete=" << cgi_state.state.headers_complete
-        //           << ", more_data=" << more_data
-        //           << ", process_complete=" << cgi_state.state.process_complete
-        //           << std::endl;
+        std::cout << "[DEBUG] handleCGIOutput: pipe_fd=" << pipe_fd
+                  << ", client_fd=" << cgi_state.state.client_fd
+                  << ", output_size=" << cgi_state.state.output.size()
+                  << ", headers_complete=" << cgi_state.state.headers_complete
+                  << ", more_data=" << more_data
+                  << ", process_complete=" << cgi_state.state.process_complete
+                  << std::endl;
 
         // Only send response once
         if (!cgi_state.state.response_sent_to_client && !cgi_state.state.output.empty())

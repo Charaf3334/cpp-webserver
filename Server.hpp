@@ -5,7 +5,7 @@
 #include "CGI.hpp"
 
 #define MAX_EVENTS 64
-#define CGI_TIMEOUT 30
+#define CGI_TIMEOUT 3
 
 class Server : public Webserv
 {
