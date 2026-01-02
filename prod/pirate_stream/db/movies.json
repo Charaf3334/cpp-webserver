@@ -1,0 +1,64 @@
+{
+  "movies": [
+    {
+      "title": "Taxi Driver",
+      "year": 1976,
+      "description": "Meet Travis Bickle: A guy who believes the world is falling apart... so naturally, he buys a gun, gets a mohawk, and decides that *he's* the solution. Honestly, it's hard to find a more ‘relatable' character in all of cinema. He's just trying to 'clean up the streets' while *every single* conversation with him is a red flag.",
+      "url": "images/taxi_driver.jpg"
+    },
+    {
+      "title": "Fight Club",
+      "year": 1999,
+      "description": "Who doesn't want to join an underground fight club to scream out their existential crises? It's basically a DIY therapy session that also doubles as a great excuse to punch people in the face. Oh, and don't forget the rules: You don't talk about it. How *original* and *deep*!",
+      "url": "images/fight_club.jpg"
+    },
+    {
+      "title": "Inglourious Basterds",
+      "year": 2009,
+      "description": "A ragtag group of World War II soldiers with serious anger issues decide to commit genocide on Nazis. You know, just another day in Tarantino's fantasy land. The real takeaway? Brad Pitt's Italian accent is the true war crime here.",
+      "url": "images/inglourious_basterds.jpg"
+    },
+    {
+      "title": "American Psycho",
+      "year": 2000,
+      "description": "Patrick Bateman, an obnoxious Wall Street guy who might just be a serial killer. Relatable, right? He's the kind of guy who *definitely* knows his business card is superior to yours. If your idea of 'self-reflection' is staring in the mirror while your mind crumbles, then this is your movie.",
+      "url": "images/american_psycho.jpg"
+    },
+    {
+      "title": "The Matrix",
+      "year": 1999,
+      "description": "Neo is *definitely* the one. Who wouldn't want to leave their day job, wear sunglasses indoors, and fight giant robots in a simulated reality? This movie makes you want to re-evaluate your entire existence… or just keep living your perfectly normal life while imagining you're a hacker who has *all the answers*.",
+      "url": "images/the_matrix.jpg"
+    },
+    {
+      "title": "Requiem for a Dream",
+      "year": 2000,
+      "description": "Ah yes, nothing says ‘I'm living my best life' like watching four people spiral into addiction while the world around them crumbles. It's so *real* and *unfiltered*, you'll almost forget to care about your own life choices. A must-see for anyone who feels like life is just one long descent into madness.",
+      "url": "images/requiem_for_a_dream.jpg"
+    },
+    {
+      "title": "Donnie Darko",
+      "year": 2001,
+      "description": "Donnie Darko: A troubled teen who *might* be saving the world, or *might* just be having a mental breakdown in his suburban bedroom. Either way, you'll feel like the movie's trying to teach you life's deepest mysteries while simultaneously making you question your high school English teacher's sanity.",
+      "url": "images/donnie_darko.jpg"
+    },
+    {
+      "title": "Taxi Driver",
+      "year": 1976,
+      "description": "Did we mention Taxi Driver already? Because Travis Bickle *really* needs to be on this list twice. Who doesn't love a man on the edge, contemplating how much the world sucks, while simultaneously setting off every 'please avoid' radar on the planet?",
+      "url": "images/taxi_driver.jpg"
+    },
+    {
+      "title": "Joker",
+      "year": 2019,
+      "description": "Because what's more relatable than a failed comedian who becomes an anarchist clown? Joker's message is clear: 'If society doesn't accept you, just start a riot and everything will be fine.' The true answer to all of life's frustrations? Take a deep breath and unleash your inner chaos.",
+      "url": "images/joker.jpg"
+    },
+    {
+      "title": "The Wolf of Wall Street",
+      "year": 2013,
+      "description": "Jordan Belfort is the embodiment of every person who believes they can be a billionaire with *just a few unethical choices*. It's like a documentary for people who think their financial goals should include *literally* stealing everything and having a blast doing it. The lesson? Money solves everything, until it doesn't.",
+      "url": "images/wolf_of_wall_street.jpg"
+    }
+  ]
+}

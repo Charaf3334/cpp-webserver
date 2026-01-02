@@ -2,13 +2,17 @@
 echo "<html><body>";
 echo "<h1>CGI & POST Data Test</h1>";
 
+if (isset($_GET['name'])) {
+    echo "<p>Query parameter 'name' is present! Value: " . htmlspecialchars($_GET['name']) . "</p>";
+} else {
+    echo "<p>No query parameter 'name' present.</p>";
+}
 ?>
 <h2>Send POST Data</h2>
 <form method="POST">
     <label>Test input: <input type="text" name="test" value="hello"></label><br><br>
     <input type="submit" value="Submit">
 </form>
-
 <?php
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $raw_input = file_get_contents('php://input');
@@ -18,6 +22,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     echo "<p>No POST data yet</p>";
 }
 
+// CGI / server variables
 $server_vars = [
     "AUTH_TYPE",
     "CONTENT_LENGTH",
@@ -27,6 +32,9 @@ $server_vars = [
     "REQUEST_METHOD",
     "SCRIPT_NAME",
     "SCRIPT_FILENAME",
+    "QUERY_STRING",
+    "PATH_INFO",
+    "PATH_TRANSLATED",
     "SERVER_NAME",
     "SERVER_PORT",
     "SERVER_PROTOCOL",

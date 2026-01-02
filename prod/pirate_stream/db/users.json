@@ -1,0 +1,42 @@
+{
+    "vohag@mailinator.com": {
+        "fname": "Dakota",
+        "lname": "Xerxes",
+        "password": "$2y$10$Gi8AoE.mOZuy64untbwYpuyk160hf9V3zE109mUHdC7jwBpysJ5NC"
+    },
+    "diry@mailinator.com": {
+        "fname": "Tobias Russo",
+        "lname": "Giselle Frederick",
+        "password": "$2y$10$7PIXD2CIiiE6EqnK6rwOP.XB1KvIsNA59f45V6HloVC0vmEJMx5tm"
+    },
+    "fawusad@mailinator.com": {
+        "fname": "Elizabeth Finch",
+        "lname": "Lucas Velez",
+        "password": "$2y$10$90qI2w6Xao8eeJzFssZKM.fNKYtSE8RALrAfM\/dPM90ercAhYeKQG"
+    },
+    "kifeki@mailinator.com": {
+        "fname": "omar",
+        "lname": "ayoubi",
+        "password": "$2y$10$XRi095zUJzxAKQzXAmR.y.x6PssRD2cqLW1lZw4XORwnka.QBKequ"
+    },
+    "qitipupyto@mailinator.com": {
+        "fname": "Breanna Avery",
+        "lname": "Aladdin Simon",
+        "password": "$2y$10$Azqs.erPkd.RTgKq8vSdbOOvwrUcGWuOd3zquDLyRAq.LkMkeoeOy"
+    },
+    "gysipan@mailinator.com": {
+        "fname": "Keelie Meyer",
+        "lname": "Samantha Rivers",
+        "password": "$2y$10$6PBS43QAAObe6601sKr2MeeKOIytMgnJ61\/9K9OTTLCX0dk4cM4um"
+    },
+    "mywih@mailinator.com": {
+        "fname": "zguellou",
+        "lname": "Steven Romero",
+        "password": "$2y$10$CbuHEi9CtnPdIk2PRDBs1eIYylOo2Dzl3mGF3RVSYP5csHpQGYELG"
+    },
+    "test@test": {
+        "fname": "zakaria",
+        "lname": "guellouch",
+        "password": "$2y$10$RcvvBC4sMssCOri32Eo2CeNNIZV5R.XkkpmI5f7c1VwywLRWVFQ1O"
+    }
+}

@@ -1,26 +1,118 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
-    <title>Webserv CGI Test</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Webserv File Manager</title>
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
+
 <body>
+    <div class="container">
+        <header>
+            <h1><i class="fas fa-terminal"></i> Webserv CGI</h1>
+            <p class="subtitle">Run and test CGI scripts safely and efficiently</p>
+        </header>
 
-    <h1>Webserv CGI Tests</h1>
+        <div class="dashboard">
+            <div class="card">
+                <h2><i class="fas fa-tachometer-alt"></i> Quick Actions</h2>
+                <div class="dashboard-buttons">
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <i class="fas fa-cloud-upload-alt"></i>
+                        </div>
+                        <h3>Upload Files</h3>
+                        <p>Upload one or multiple files to the server securely</p>
+                        <a href="/upload/" class="btn btn-primary">
+                            <i class="fas fa-upload"></i> Upload
+                        </a>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <i class="fas fa-folder-open"></i>
+                        </div>
+                        <h3>Browse Files</h3>
+                        <p>View and manage uploaded files in autoindex directory</p>
+                        <a href="/autoindex/" class="btn btn-primary">
+                            <i class="fas fa-folder-open"></i> Autoindex
+                        </a>
+                    </div>
 
-    <div class="section">
-        <h2>Stress Tests</h2>
-        <a target="_blank" href="/cgi_files/overflow_pipe_2mb.py" class="btn">overflow_pipe_2mb</a>
-        <a target="_blank" href="/cgi_files/slow_cgi.py" class="btn">slow_cgi</a>
-        <a target="_blank" href="/cgi_files/while_true.py" class="btn">while_true</a>
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <i class="fas fa-code"></i>
+                        </div>
+                        <h3>CGI Scripts</h3>
+                        <p>Test and run CGI scripts and applications</p>
+                        <a href="/cgi_files/" class="btn btn-primary">
+                            <i class="fas fa-terminal"></i> CGI Files
+                        </a>
+                    </div>
+
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <i class="fas fa-film"></i>
+                        </div>
+                        <h3>Streaming Service</h3>
+                        <p>Access the PirateStream movie streaming platform</p>
+                        <a target="_blank" href="/pirate_stream/main.php" class="btn btn-primary">
+                            <i class="fas fa-external-link-alt"></i> PirateStream
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="cgi-section">
+            <h2><i class="fas fa-terminal"></i> CGI Scripts</h2>
+
+            <div class="cgi-list" id="cgiList">
+                <div class="section">
+                    <h3><i class="fas fa-fire"></i> Stress Tests</h3>
+                    <a target="_blank" href="/cgi_files/overflow_pipe_2mb.py" class="btn btn-primary">
+                        <i class="fas fa-bomb"></i> overflow_pipe_2mb
+                    </a>
+                    <a target="_blank" href="/cgi_files/slow_cgi.py" class="btn btn-primary">
+                        <i class="fas fa-hourglass-half"></i> slow_cgi
+                    </a>
+                    <a target="_blank" href="/cgi_files/while_true.py" class="btn btn-primary">
+                        <i class="fas fa-infinity"></i> while_true
+                    </a>
+                </div>
+
+                <div class="section">
+                    <h3><i class="fas fa-smile"></i> Simple Tests</h3>
+                    <a target="_blank" href="/cgi_files/headers.php" class="btn btn-primary">
+                        <i class="fas fa-file-code"></i> headers
+                    </a>
+                    <a target="_blank" href="/cgi_files/echo.php" class="btn btn-primary">
+                        <i class="fas fa-terminal"></i> echo
+                    </a>
+                </div>
+            </div>
+        </div>
+
     </div>
 
-    <div class="section">
-        <h2>Simple Tests</h2>
-        <a target="_blank" href="/cgi_files/headers.php" class="btn">headers</a>
-        <a target="_blank" href="/cgi_files/echo.php" class="btn">echo</a>
-    </div>
+    <footer>
+        <div class="footer-content">
+            © <span class="currentYear"></span> Webserver
+            <span class="footer-sep">•</span>
+            <span>Created by the finest minds of 1337, skilled in coding, undefeated in procrastination</span>
+            <span class="footer-sep">•</span>
+            <a class="profile-link" target="_blank" href="https://github.com/Charaf3334">Charafeddine</a>,
+            <a class="profile-link" target="_blank" href="https://github.com/mid-taoufiq">Taoufiq</a> &
+            <a class="profile-link" target="_blank" href="http://github.com/itsmeyeshua">Zakaria</a>
+        </div>
+    </footer>
 
+    <script>
+        const currentYear = document.querySelector('.currentYear');
+        currentYear.textContent = new Date().getFullYear();
+    </script>
 </body>
+
 </html>

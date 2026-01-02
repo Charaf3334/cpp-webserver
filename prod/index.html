@@ -1,18 +1,90 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
+
 <head>
     <meta charset="UTF-8">
-    <title>Webserv</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Webserv File Manager</title>
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
-<body>
-    <h1>Hello from static HTML!</h1>
 
-    <div class="section">
-        <a href="/autoindex/" class="btn">Autoindex</a>
-        <a href="/cgi_files/" class="btn">CGI Files</a>
-        <a href="/" class="btn">Upload File(s)</a>
-        <a href="/pirate_stream/register.php" class="btn">Redirect to PirateStream</a>
+<body>
+    <div class="container">
+        <header>
+            <h1><i class="fas fa-server"></i> Webserv Control Panel</h1>
+            <p class="subtitle">
+                A lightweight HTTP server interface for uploads, browsing, and CGI execution
+            </p>
+        </header>
+
+        <div class="dashboard">
+            <div class="card">
+                <h2><i class="fas fa-tachometer-alt"></i> Quick Actions</h2>
+                <div class="dashboard-buttons">
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <i class="fas fa-cloud-upload-alt"></i>
+                        </div>
+                        <h3>Upload Files</h3>
+                        <p>Upload one or multiple files to the server securely</p>
+                        <a href="/upload/" class="btn btn-primary">
+                            <i class="fas fa-upload"></i> Upload
+                        </a>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <i class="fas fa-folder-open"></i>
+                        </div>
+                        <h3>Browse Files</h3>
+                        <p>View and manage uploaded files in autoindex directory</p>
+                        <a href="/autoindex/" class="btn btn-primary">
+                            <i class="fas fa-folder-open"></i> Autoindex
+                        </a>
+                    </div>
+
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <i class="fas fa-code"></i>
+                        </div>
+                        <h3>CGI Scripts</h3>
+                        <p>Test and run CGI scripts and applications</p>
+                        <a href="/cgi_files/" class="btn btn-primary">
+                            <i class="fas fa-terminal"></i> CGI Files
+                        </a>
+                    </div>
+
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <i class="fas fa-film"></i>
+                        </div>
+                        <h3>Streaming Service</h3>
+                        <p>Access the PirateStream movie streaming platform</p>
+                        <a target="_blank" href="/pirate_stream/main.php" class="btn btn-primary">
+                            <i class="fas fa-external-link-alt"></i> PirateStream
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
     </div>
+    <footer>
+        <div class="footer-content">
+            © <span class="currentYear"></span> Webserver
+            <span class="footer-sep">•</span>
+            <span>Created by the finest minds of 1337, skilled in coding, undefeated in procrastination</span>
+            <span class="footer-sep">•</span>
+            <a class="profile-link" target="_blank" href="https://github.com/Charaf3334">Charafeddine</a>,
+            <a class="profile-link" target="_blank" href="https://github.com/mid-taoufiq">Taoufiq</a> &
+            <a class="profile-link" target="_blank" href="http://github.com/itsmeyeshua">Zakaria</a>
+        </div>
+    </footer>
+
+    <script>
+        const currentYear = document.querySelector('.currentYear');
+        currentYear.textContent = new Date().getFullYear();
+    </script>
 </body>
+
 </html>

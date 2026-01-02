@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Webserv File Manager</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <h1><i class="fas fa-cloud-upload-alt"></i> Webserv Upload</h1>
+            <p class="subtitle">Upload, manage, and organize your files with ease</p>
+        </header>
+
+        <div class="dashboard">
+            <div class="card">
+                <h2><i class="fas fa-tachometer-alt"></i> Quick Actions</h2>
+                <div class="dashboard-buttons">
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <i class="fas fa-cloud-upload-alt"></i>
+                        </div>
+                        <h3>Upload Files</h3>
+                        <p>Upload one or multiple files to the server securely</p>
+                        <a href="/upload/" class="btn btn-primary">
+                            <i class="fas fa-upload"></i> Upload
+                        </a>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <i class="fas fa-folder-open"></i>
+                        </div>
+                        <h3>Browse Files</h3>
+                        <p>View and manage uploaded files in autoindex directory</p>
+                        <a href="/autoindex/" class="btn btn-primary">
+                            <i class="fas fa-folder-open"></i> Autoindex
+                        </a>
+                    </div>
+
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <i class="fas fa-code"></i>
+                        </div>
+                        <h3>CGI Scripts</h3>
+                        <p>Test and run CGI scripts and applications</p>
+                        <a href="/cgi_files/" class="btn btn-primary">
+                            <i class="fas fa-terminal"></i> CGI Files
+                        </a>
+                    </div>
+
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <i class="fas fa-film"></i>
+                        </div>
+                        <h3>Streaming Service</h3>
+                        <p>Access the PirateStream movie streaming platform</p>
+                        <a target="_blank" href="/pirate_stream/main.php" class="btn btn-primary">
+                            <i class="fas fa-external-link-alt"></i> PirateStream
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="upload-section">
+            <h2><i class="fas fa-upload"></i> Upload Files</h2>
+
+            <div class="upload-area" id="uploadArea">
+                <div class="upload-icon">
+                    <i class="fas fa-cloud-upload-alt"></i>
+                </div>
+                <div class="upload-text">
+                    Drag & drop your files here
+                </div>
+                <div class="upload-hint">
+                    or click to browse files
+                </div>
+                <input type="file" id="fileInput" multiple>
+            </div>
+
+            <div class="file-list" id="fileList" style="display: none;">
+
+                <h3><i class="fas fa-file-alt"></i> Selected Files</h3>
+                <div id="selectedFiles"></div>
+            </div>
+
+            <form class="upload-form" id="uploadForm" action="/upload" method="POST" enctype="multipart/form-data">
+
+                <div class="progress-container" id="progressContainer">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressFill"></div>
+                    </div>
+                    <div class="progress-text" id="progressText">Uploading... 0%</div>
+                </div>
+
+                <div class="btn-group">
+                    <button type="submit" class="btn btn-primary" id="uploadBtn">
+                        <i class="fas fa-upload"></i> Upload Files
+                    </button>
+                    <button type="button" class="btn btn-secondary" id="clearBtn">
+                        <i class="fas fa-times"></i> Clear Selection
+                    </button>
+                </div>
+            </form>
+
+            <div class="message" id="message"></div>
+        </div>
+
+    </div>
+
+    <footer>
+        <div class="footer-content">
+            © <span class="currentYear"></span> Webserver
+            <span class="footer-sep">•</span>
+            <span>Created by the finest minds of 1337, skilled in coding, undefeated in procrastination</span>
+            <span class="footer-sep">•</span>
+            <a class="profile-link" target="_blank" href="https://github.com/Charaf3334">Charafeddine</a>,
+            <a class="profile-link" target="_blank" href="https://github.com/mid-taoufiq">Taoufiq</a> &
+            <a class="profile-link" target="_blank" href="http://github.com/itsmeyeshua">Zakaria</a>
+        </div>
+    </footer>
+
+    <script>
+        // DOM Elements
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const fileList = document.getElementById('fileList');
+        const selectedFiles = document.getElementById('selectedFiles');
+        const uploadForm = document.getElementById('uploadForm');
+        const clearBtn = document.getElementById('clearBtn');
+        const progressContainer = document.getElementById('progressContainer');
+        const progressFill = document.getElementById('progressFill');
+        const progressText = document.getElementById('progressText');
+        const message = document.getElementById('message');
+        const totalSize = document.getElementById('totalSize');
+        const currentYear = document.querySelector('.currentYear');
+
+        currentYear.textContent = new Date().getFullYear();
+
+        // File selection
+        let selectedFilesArray = [];
+
+        // Event Listeners
+        uploadArea.addEventListener('click', () => fileInput.click());
+
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            handleFiles(e.dataTransfer.files);
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            handleFiles(e.target.files);
+        });
+
+        clearBtn.addEventListener('click', clearSelection);
+
+        uploadForm.addEventListener('submit', handleUpload);
+
+        // Functions
+        function handleFiles(files) {
+            for (let file of files) {
+                if (!selectedFilesArray.some(f => f.name === file.name && f.size === file.size)) {
+                    selectedFilesArray.push(file);
+                }
+            }
+            updateFileList();
+        }
+
+        function updateFileList() {
+            if (selectedFilesArray.length === 0) {
+                fileList.style.display = 'none';
+                return;
+            }
+
+            fileList.style.display = 'block';
+            selectedFiles.innerHTML = '';
+
+            selectedFilesArray.forEach((file, index) => {
+                const fileItem = document.createElement('div');
+                fileItem.className = 'file-item';
+
+                const fileIcon = getFileIcon(file.type);
+
+                fileItem.innerHTML = `
+                    <div class="file-info">
+                        <div class="file-icon ${fileIcon.class}">
+                            <i class="${fileIcon.icon}"></i>
+                        </div>
+                        <div>
+                            <div class="file-name">${file.name}</div>
+                            <div class="file-size">${formatFileSize(file.size)}</div>
+                        </div>
+                    </div>
+                    <div class="file-actions">
+                        <button class="action-btn remove-btn" onclick="removeFile(${index})" title="Remove">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                `;
+
+                selectedFiles.appendChild(fileItem);
+            });
+
+        }
+
+        function removeFile(index) {
+            selectedFilesArray.splice(index, 1);
+            updateFileList();
+        }
+
+        function clearSelection() {
+            selectedFilesArray = [];
+            fileInput.value = '';
+            updateFileList();
+            message.style.display = 'none';
+        }
+
+        function getFileIcon(mimeType) {
+            if (mimeType.startsWith('image/')) {
+                return { icon: 'fas fa-image', class: 'image' };
+            } else if (mimeType.startsWith('video/')) {
+                return { icon: 'fas fa-video', class: 'video' };
+            } else if (mimeType.startsWith('audio/')) {
+                return { icon: 'fas fa-music', class: 'audio' };
+            } else if (mimeType.includes('pdf')) {
+                return { icon: 'fas fa-file-pdf', class: 'pdf' };
+            } else if (mimeType.includes('word') || mimeType.includes('document')) {
+                return { icon: 'fas fa-file-word', class: 'document' };
+            } else if (mimeType.includes('zip') || mimeType.includes('archive')) {
+                return { icon: 'fas fa-file-archive', class: 'archive' };
+            } else if (mimeType.includes('text') || mimeType.includes('code')) {
+                return { icon: 'fas fa-file-code', class: 'code' };
+            } else {
+                return { icon: 'fas fa-file', class: '' };
+            }
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        async function handleUpload(e) {
+            e.preventDefault();
+
+            if (selectedFilesArray.length === 0) {
+                showMessage('Please select at least one file to upload.', 'error');
+                return;
+            }
+
+            const formData = new FormData();
+
+            // Add all selected files
+            selectedFilesArray.forEach(file => {
+                formData.append('files[]', file);
+            });
+
+            // Show progress
+            progressContainer.style.display = 'block';
+            progressFill.style.width = '0%';
+            progressText.textContent = 'Uploading... 0%';
+
+            try {
+                const response = await uploadFiles(formData);
+
+                if (response.ok || response.status == 201) {
+                    clearSelection();
+                    progressFill.style.width = '100%';
+                    progressText.textContent = 'Upload complete!';
+                } else {
+                    throw new Error('Upload failed');
+                }
+            } catch (error) {
+                showMessage('Upload failed. Please try again.', 'error');
+                console.error('Upload error:', error);
+            } finally {
+                // Hide progress after delay
+                setTimeout(() => {
+                    progressContainer.style.display = 'none';
+                }, 2000);
+            }
+        }
+
+        function uploadFiles(formData) {
+            return new Promise((resolve, reject) => {
+                const xhr = new XMLHttpRequest();
+
+                xhr.upload.addEventListener('progress', (e) => {
+                    if (e.lengthComputable) {
+                        const percentComplete = (e.loaded / e.total) * 100;
+                        progressFill.style.width = percentComplete + '%';
+                        progressText.textContent = `Uploading... ${Math.round(percentComplete)}%`;
+                    }
+                });
+
+                xhr.addEventListener('load', () => {
+                    resolve(xhr);
+                });
+
+                xhr.addEventListener('error', () => {
+                    reject(new Error('Upload failed'));
+                });
+
+                xhr.open('POST', uploadForm.action);
+                xhr.send(formData);
+            });
+        }
+
+        function showMessage(text, type) {
+            message.textContent = text;
+            message.className = `message ${type}`;
+            message.style.display = 'block';
+
+            setTimeout(() => {
+                message.style.display = 'none';
+            }, 5000);
+        }
+    </script>
+</body>
+
+</html>

@@ -83,14 +83,42 @@ to do:
 
 
 zakaria - cgi
-    2- query params
-    exit status dyal cgi for 500 server error
-    timeout even if output exist
-    4- cgi execute empty file 500
+    i should build a default working cgi files in cgi files final
 
-    7- i should build a default working cgi files in cgi files final
+    ✅query params
+    ✅environment in cgi
+    folder index.html
+    ✅register/login pirate stream
+    
+    ✅: decodeURI: /autoindex/upload/Client_10/hair%20wrap.png -> GET hair wrap.png -> is this correct :
+        uri before: /autoindex/upload/Client_10/hair%20wrap.png%3Fusername=test
+        request.queries: ?username=test
+        request.uri: /autoindex/upload/Client_10/hair wrap.png
 
-    to charaf:
-    zedt addr and port frequest
-    added extra headers to build response so i can set the cookies,
-    if epoll is fixed for both get and post, you must explain it to me because i need to implement it in cgi too (time out user, time out script)
+
+
+/                -> root/index
+/path/           -> root/path/index
+/path/file.conf  -> root/path/file.conf
+/path/file.conf/ -> root/path/file.conf/index
+
+l9raya
+testat
+
+    
+TASA2OLAT: 
+    location / {
+        root /home/zguellou/Documents/jdida/prod;
+        allow_methods GET POST;
+        index login.php;
+        cgi on;
+    }
+
+PROMO 9DIMA:
+    mo3dila: /cgi-bin/script.cgi/foo/bar this is not a valid request -> https://datatracker.ietf.org/doc/html/rfc1945#section-5.1, but in cgi rfc kihandliha -> https://datatracker.ietf.org/doc/html/rfc3875#section-4.1.6
+
+url enconding, browser kisendi special characters(space, <, >, ", #, %, {, }, |, \, ^, ~, [, ], `) as % encoding, o7naya kandecodiwhom, saad lli ay3tina ras lkhit
+
+# mhandliya rasha brasha
+
+movie stream dynamic
