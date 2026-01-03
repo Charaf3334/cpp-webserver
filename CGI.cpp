@@ -93,7 +93,7 @@ bool CGI::start(State &state)
             state.pipe_in[1] = -1;
         }
     }
-    // std::cout << "Started CGI process " << state.pid << " for client " << state.client_fd << std::endl;
+    std::cout << "Started CGI process " << state.pid << " for client " << state.client_fd << std::endl;
     return true;
 }
 void CGI::childProcess(int pipe_in[2], int pipe_out[2], int pipe_err[2])
@@ -135,6 +135,7 @@ bool CGI::handleOutput(State &state)
     
     char buffer[65536];
     ssize_t bytes_read;
+
     
     bytes_read = read(state.pipe_out[0], buffer, sizeof(buffer));
     if (bytes_read > 0) {
@@ -145,6 +146,7 @@ bool CGI::handleOutput(State &state)
                 state.headers_complete = true;
                 std::string headers_str = state.output.substr(0, header_end);
                 state.cgi_headers = parseCGIHeaders(headers_str);
+
             }
         }
         return true;
@@ -345,12 +347,14 @@ void CGI::setupEnvironment()
     env_vars.clear();
 
     env_vars.push_back("REQUEST_METHOD=" + request.method);
-    env_vars.push_back("SCRIPT_FILENAME=" + script_path);
-    // ask old promo, should it be implemented
-    env_vars.push_back("QUERY_STRING=");
+    env_vars.push_back("SCRIPT_FILENAME=" + script_path); // for php
+    env_vars.push_back("SCRIPT_NAME=" + script_path);
+    env_vars.push_back("QUERY_STRING=" + request.queries);
+    env_vars.push_back("PATH_INFO=");
+    env_vars.push_back("PATH_TRANSLATED=");
     env_vars.push_back("REDIRECT_STATUS=200");
     env_vars.push_back("GATEWAY_INTERFACE=CGI/1.1");
-    env_vars.push_back("SERVER_PROTOCOL=HTTP/1.1");
+    env_vars.push_back("SERVER_PROTOCOL=HTTP/1.0");
     env_vars.push_back("SERVER_SOFTWARE=Webserv/1.0");
 
     setupAuthEnvironment();
@@ -397,9 +401,9 @@ void CGI::setupServerEnvironment()
     std::string server_port = "80";
 
     // print request headers
-    // for (std::map<std::string, std::string>::iterator it = request.headers.begin(); it != request.headers.end(); it++) {
-    //     std::cerr << "\nfirst: |" << it->first << "| second: |" <<  it->second << "|" ;
-    // }
+    for (std::map<std::string, std::string>::iterator it = request.headers.begin(); it != request.headers.end(); it++) {
+        std::cerr << "\nfirst: |" << it->first << "| second: |" <<  it->second << "|" ;
+    }
         
     std::map<std::string, std::string>::iterator it = request.headers.find("host");
     if (it != request.headers.end())
@@ -484,6 +488,7 @@ void CGI::setupPathEnvironment()
 {
     env_vars.push_back("SCRIPT_NAME=" + request.uri);
     env_vars.push_back("PATH_INFO="); // if path info is empty same should be for path translated
+    // if path info is empty, path translated must be unset
     env_vars.push_back("PATH_TRANSLATED=");
 }
 
