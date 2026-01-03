@@ -36,6 +36,7 @@ class Server : public Webserv
             bool just_parsed;
             bool is_post;
             bool boundary_found;
+            bool end_boundary_found;
             bool just_took_headers;
             int temporary_file_fd;
             int file_fd;
@@ -45,12 +46,16 @@ class Server : public Webserv
             size_t first_time;
             std::string headers;
             std::string temporary_body;
+            std::string temporary_body_check;
             std::string body_buffer; 
             std::string to_write;
             char buffer[20480];
             struct timeval start_time;
             Request request;
             bool keep_alive;
+            int loop_counter;
+            bool start_counting;
+            int temporary_bytes;
         };
         std::map<int, sockaddr_in> client_addresses; // zakaria
         static Server* instance;
