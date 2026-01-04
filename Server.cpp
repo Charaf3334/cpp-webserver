@@ -180,11 +180,6 @@ std::string Server::readRequest(int epoll_fd, int client_fd)
         client.temporary_bytes = 0;
         client.end_boundary_found = false;
     }
-    // if (!client.has_start_time || client.first_time > 0)
-    // {
-    //     gettimeofday(&client.start_time, NULL);
-    //     client.has_start_time = true;
-    // }
     while (1)
     {
         client.bytes = read(client_fd, client.buffer, sizeof(client.buffer));
@@ -253,7 +248,6 @@ std::string Server::readRequest(int epoll_fd, int client_fd)
                     client.content_len = std::atoll(content_length_value.c_str());
                 }
             }
-            // std::cout << client.headers << std::endl;
             if (!parseRequest(client_fd, client.headers, client.request))
             {
                 client.is_request_full = true;
@@ -288,8 +282,7 @@ std::string Server::readRequest(int epoll_fd, int client_fd)
                     client.keep_alive = client.request.keep_alive;
                     return "";
                 }
-                std::string toSearch = client.request.location.root + client.request.uri;
-                
+                std::string toSearch = buildSearchingFile(client.request.location.root, client.request.uri, client.request.location);
                 size_t pos = simplifyPath(toSearch).find(client.request.location.root);
                 if (pos == std::string::npos || pos != 0)
                 {
@@ -321,6 +314,7 @@ std::string Server::readRequest(int epoll_fd, int client_fd)
                     client.keep_alive = client.request.keep_alive;
                     return "";
                 }
+                client.request.location.upload_dir = client.request.location.root + client.request.location.upload_dir;
                 std::string upload_dir = client.request.location.upload_dir;
                 if (stat(upload_dir.c_str(), &st) == -1)
                 {
@@ -575,11 +569,11 @@ std::string Server::readRequest(int epoll_fd, int client_fd)
                 }
                 
                 // process cgi, body is finished
-                std::string toSearch = client.request.location.root + client.request.uri;
+                std::string toSearch = buildSearchingFile(client.request.location.root, client.request.uri, client.request.location);
                 std::string ext = getExtension(toSearch);
-                if (getLocation(client.request.uri, server).hasCgi && (ext == ".py" || ext == ".php"))
+                if (client.request.location.hasCgi && (ext == ".py" || ext == ".php"))
                 {
-                    if (!setupCGI(client.request, toSearch, ext, client_fd))
+                    if (!setupCGI(client.request, toSearch, ext, client_fd, epoll_fd))
                     {
                         std::string response = buildResponse(buildErrorPage(500), ".html", 500, false, "", client.request.keep_alive);
                         sendResponse(client_fd, response, client.request.keep_alive);
@@ -718,14 +712,37 @@ bool Server::parse_path(std::string &path)
 
 std::string Server::decodeURI(std::string uri)
 {
-    size_t pos = uri.find("%20");
-    while (pos != std::string::npos)
+    std::string result; 
+
+    for (size_t i = 0; i < uri.size(); i++)
     {
-        uri.erase(pos, 3);
-        uri.insert(pos, std::string(1, ' '));
-        pos = uri.find("%20");
+        if (uri[i] == '%' && (i + 2 < uri.size()) && std::isxdigit(uri[i + 1]) && std::isxdigit(uri[i + 2]))
+        {
+            std::string hex = uri.substr(i + 1, 2);
+            char decoded = static_cast<char>(std::strtol(hex.c_str(), NULL, 16));
+            result += decoded;
+            i += 2;
+        }
+        else
+            result += uri[i];
     }
-    return uri;
+    return result;
+}
+
+bool Server::validURI(std::string uri)
+{
+    for (size_t i = 0; i < uri.size(); i++)
+    {
+        if (uri[i] == '%' && (i + 2 < uri.size()) && std::isxdigit(uri[i + 1]) && std::isxdigit(uri[i + 2]))
+        {
+            std::string hex = uri.substr(i + 1, 2);
+            char decoded = static_cast<char>(std::strtol(hex.c_str(), NULL, 16));
+            if (decoded == '/' || decoded == '<' || decoded == '>' || decoded == '"' || decoded == '|' || decoded == '\\' || decoded == '^' || decoded == '`')
+                return false;
+            i += 2;
+        }
+    }
+    return true;
 }
 
 bool Server::parse_methode(std::string *words, int &error_status, Request &request)
@@ -775,13 +792,15 @@ bool Server::parse_methode(std::string *words, int &error_status, Request &reque
         return false;
     }
     request.method = words[0];
-    request.uri = words[1];
-    if (request.uri.find("%20") != std::string::npos)
-        request.uri = decodeURI(request.uri);
+    if (!validURI(words[1])) {
+        error_status = 400;
+        return false;
+    }
+    request.uri = decodeURI(words[1]);
     size_t pos = request.uri.find("?");
     if (pos != std::string::npos)
     {
-        request.queries = request.uri.substr(pos);
+        request.queries = request.uri.substr(pos + 1);
         request.uri = request.uri.substr(0, pos);
     }
     request.http_version = words[2];
@@ -1229,7 +1248,26 @@ std::vector<std::string> Server::get_bodyheaders_Lines(const std::string req)
     return lines;
 }
 
-bool Server::serveClient(int client_fd, Request request)
+std::string Server::buildSearchingFile(std::string root, std::string uri, Location location)
+{
+    std::string result;
+
+    std::string location_path = location.path;
+    result += root;
+    if (location_path.length() > 1)
+        result += uri.substr(location_path.length());
+    else
+        result += uri;
+    return result;
+}
+
+void Server::mergeIndexes(Location &location, std::string toSearch)
+{
+    for (size_t i = 0; i < location.index.size(); i++)
+        location.index[i] = toSearch + location.index[i];
+}
+
+bool Server::serveClient(int client_fd, Request request, int epoll_fd)
 {
     Webserv::Server server;
     if (request.method == "GET")
@@ -1276,7 +1314,7 @@ bool Server::serveClient(int client_fd, Request request)
                     return sendResponse(client_fd, response, request.keep_alive);
                 }
             }
-            std::string toSearch = location.root + request.uri;
+            std::string toSearch = buildSearchingFile(location.root, request.uri, location);
             size_t pos = simplifyPath(toSearch).find(location.root);
             if (pos == std::string::npos || pos != 0)
             {
@@ -1292,6 +1330,7 @@ bool Server::serveClient(int client_fd, Request request)
             {
                 if (S_ISDIR(st.st_mode) && toSearch[toSearch.size() - 1] == '/')
                 {
+                    mergeIndexes(location, toSearch);
                     if (!atleastOneFileExists(location))
                     {
                         if (!location.autoindex)
@@ -1302,7 +1341,7 @@ bool Server::serveClient(int client_fd, Request request)
                         else
                         {
                             int code;
-                            std::string body = dirlisntening_gen(request.uri, location.root + request.uri, code);
+                            std::string body = dirlisntening_gen(request.uri, toSearch, code);
                             std::string response = buildResponse(body, ".html", code, false, "", request.keep_alive);
                             return sendResponse(client_fd, response, request.keep_alive);
                         }
@@ -1310,9 +1349,21 @@ bool Server::serveClient(int client_fd, Request request)
                     else
                     {
                         std::string index_file = getFilethatExists(location);
-                        if (!index_file.empty())
+                        if (!index_file.empty()) // tanrej3o lik zakaria
                         {
-                            return sendFileResponse(client_fd, index_file, getExtension(index_file), 200, request.keep_alive);
+                            std::string ext = getExtension(index_file);
+                            if (location.hasCgi && (ext == ".py" || ext == ".php"))
+                            {
+                                // non blocking cgi
+                                if (!setupCGI(request, index_file, ext, client_fd, epoll_fd))
+                                {
+                                    std::string response = buildResponse(buildErrorPage(500), ".html", 500, false, "", request.keep_alive);
+                                    return sendResponse(client_fd, response, request.keep_alive);
+                                }
+                                return true;
+                            } 
+                            else
+                                return sendFileResponse(client_fd, index_file, ext, 200, request.keep_alive);
                         }
                         else
                         {
@@ -1327,12 +1378,12 @@ bool Server::serveClient(int client_fd, Request request)
                     {
                         std::string ext = getExtension(toSearch);
                         std::string response;
-                        if (getLocation(request.uri, server).hasCgi && (ext == ".py" || ext == ".php"))
+                        if (location.hasCgi && (ext == ".py" || ext == ".php"))
                         {
                             // non blocking cgi
-                            if (!setupCGI(request, toSearch, ext, client_fd))
+                            if (!setupCGI(request, toSearch, ext, client_fd, epoll_fd))
                             {
-                                std::string response = buildResponse(buildErrorPage(500), ".html", 500, false, "", request.keep_alive);
+                                response = buildResponse(buildErrorPage(500), ".html", 500, false, "", request.keep_alive);
                                 return sendResponse(client_fd, response, request.keep_alive);
                             }
                             return true;
@@ -1341,7 +1392,6 @@ bool Server::serveClient(int client_fd, Request request)
                         {
                             return sendFileResponse(client_fd, toSearch, ext, 200, request.keep_alive);
                         }
-                        return sendResponse(client_fd, response, request.keep_alive);
                     }
                     else
                     {
@@ -1374,7 +1424,7 @@ bool Server::serveClient(int client_fd, Request request)
                 std::string response = buildResponse(buildErrorPage(405), ".html", 405, false, "", request.keep_alive);
                 return sendResponse(client_fd, response, request.keep_alive);
             }
-            std::string filepath = location.root + request.uri;
+            std::string filepath = buildSearchingFile(location.root, request.uri, location);
             size_t pos = simplifyPath(filepath).find(location.root);
             if (pos == std::string::npos || pos != 0)
             {
@@ -1658,11 +1708,6 @@ void Server::initialize(void)
         for (int i = 0; i < n; i++)
         {
             int fd = events[i].data.fd;
-            if (cgi_states.find(fd) != cgi_states.end())
-            {
-                handleCGIOutput(epoll_fd, fd);
-                continue;
-            }
             bool is_listening = false;
             for (size_t j = 0; j < socket_fds.size(); j++)
             {
@@ -1707,8 +1752,17 @@ void Server::initialize(void)
                     }
                 }
             }
+            else if ((cgi_states.find(fd) != cgi_states.end()) && (events[i].events & (EPOLLIN | EPOLLHUP))) {
+                if (cgi_states.find(fd) != cgi_states.end())
+                {
+                    handleCGIOutput(epoll_fd, fd);
+                    continue;
+                }
+            }
             else if (events[i].events & EPOLLIN)
             {
+                if (find(client_fds.begin(), client_fds.end(), fd) == client_fds.end()) // zakaria
+                    continue;
                 std::string request_string = readRequest(epoll_fd, fd);
                 if (read_states.find(fd) != read_states.end())
                 {
@@ -1730,7 +1784,7 @@ void Server::initialize(void)
                     continue;
                 }
                 clientfd_to_request[fd] = &request;
-                bool sending_done = serveClient(fd, request);
+                bool sending_done = serveClient(fd, request, epoll_fd);
                 for (std::map<int, CgiState>::iterator it = cgi_states.begin(); it != cgi_states.end(); it++)
                 {
                     if (it->second.state.client_fd == fd && !it->second.added_to_epoll)
@@ -1759,7 +1813,7 @@ void Server::initialize(void)
 
 
 // cgi block server
-bool Server::setupCGI(Request &request, std::string &script_path, std::string &extension, int client_fd)
+bool Server::setupCGI(Request &request, std::string &script_path, std::string &extension, int client_fd, int epoll_fd)
 {
     CGI cgi(this, request, script_path, extension);
 
@@ -1772,60 +1826,50 @@ bool Server::setupCGI(Request &request, std::string &script_path, std::string &e
 
     if (cgi_state.state.pipe_out[0] != -1)
     {
-        setNonBlockingFD(cgi_state.state.pipe_out[0]);
-        setNonBlockingFD(cgi_state.state.pipe_err[0]);
+        if (!setNonBlockingFD(cgi_state.state.pipe_out[0]) || !setNonBlockingFD(cgi_state.state.pipe_err[0])){
+            cleanupCGI(epoll_fd, cgi_state.state.pipe_out[0], true);
+            return false;
+        }
 
-        cgi_states[cgi_state.state.pipe_out[0]] = cgi_state;
+        cgi_states[cgi_state.state.pipe_out[0]] = cgi_state; //server struct dyal cgis
         return true;
     }
     return false;
 }
 
-
 void Server::handleCGIOutput(int epoll_fd, int pipe_fd)
 {
+    if (cgi_states.find(pipe_fd) == cgi_states.end())
+        return;
+    
     CgiState &cgi_state = cgi_states[pipe_fd];
     CGI cgi(this, cgi_state.state.request, cgi_state.state.script_path, cgi_state.state.extension);
 
-    bool more_data = cgi.handleOutput(cgi_state.state);
+    cgi.handleOutput(cgi_state.state);
 
-    if (!more_data || cgi_state.state.process_complete)
+    if (cgi_state.state.process_complete)
     {
-        // std::cout << "[DEBUG] handleCGIOutput: pipe_fd=" << pipe_fd
-        //           << ", client_fd=" << cgi_state.state.client_fd
-        //           << ", output_size=" << cgi_state.state.output.size()
-        //           << ", headers_complete=" << cgi_state.state.headers_complete
-        //           << ", more_data=" << more_data
-        //           << ", process_complete=" << cgi_state.state.process_complete
-        //           << std::endl;
-
-        // Only send response once
-        if (!cgi_state.state.response_sent_to_client && !cgi_state.state.output.empty())
+        if (!cgi_state.state.response_sent_to_client)
         {
             std::string response;
-            if (cgi_state.state.syntax_error)
+            
+            if (cgi_state.state.stdout_output.empty())
+                response = buildResponse(buildErrorPage(500), ".html", 500, false, "", false);
+            else if (cgi_state.state.syntax_error)
                 response = CGI::buildErrorResponse(this, cgi_state.state);
             else
                 response = CGI::buildResponseFromState(this, cgi_state.state, cgi_state.state.request.keep_alive);
 
-            cgi_state.state.response_sent_to_client = true; // response_sent_to_client true BEFORE sending
+            cgi_state.state.response_sent_to_client = true;
 
             bool fully_sent = sendResponse(cgi_state.state.client_fd, response, cgi_state.state.request.keep_alive);
 
-            if (client_states.find(cgi_state.state.client_fd) != client_states.end()) // if data is pending, register for EPOLLOUT to continue sending
+            if (client_states.find(cgi_state.state.client_fd) != client_states.end()) // continue sending 
                 modifyEpollEvents(epoll_fd, cgi_state.state.client_fd, EPOLLIN | EPOLLOUT);
-            else if (!fully_sent || !cgi_state.state.request.keep_alive)
+            else if (fully_sent && !cgi_state.state.request.keep_alive)
                 closeClient(epoll_fd, cgi_state.state.client_fd, true);
-            // If fully_sent && keep_alive, client stays open for next request
         }
-        else if (cgi_state.state.output.empty())
-        {
-            sendResponse(cgi_state.state.client_fd, buildResponse(buildErrorPage(500), ".html", 500, false, "", false), false);
-            closeClient(epoll_fd, cgi_state.state.client_fd, true);
-        }
-
-        if (cgi_state.state.process_complete)
-            cleanupCGI(epoll_fd, pipe_fd, true);
+        cleanupCGI(epoll_fd, pipe_fd, false);
     }
 }
 
@@ -1840,10 +1884,8 @@ void Server::cleanupCGI(int epoll_fd, int pipe_fd, bool kill_process)
 
     if (cgi_state.added_to_epoll) // keep alive from request zakaria
     {
-        (void) epoll_fd;
-        // std::cout << "removed from epoll\n";
-        // epoll_ctl(epoll_fd, EPOLL_CTL_DEL, pipe_fd, NULL);
-        // cgi_state.added_to_epoll = false;
+        epoll_ctl(epoll_fd, EPOLL_CTL_DEL, pipe_fd, NULL);
+        cgi_state.added_to_epoll = false;
     }
 
     cgi.cleanup(cgi_state.state, kill_process);
@@ -1860,6 +1902,8 @@ void Server::checkTimeoutCGI(int epoll_fd)
         if (difftime(now, it->second.start_time) > CGI_TIMEOUT)
         {
             std::cerr << "CGI timeout for PID " << it->second.state.pid << std::endl;
+            it->second.state.process_complete = true;
+            it->second.state.response_sent_to_client = true;
             std::string response = buildResponse(buildErrorPage(504), ".html", 504, false, "", it->second.state.request.keep_alive);
             sendResponse(it->second.state.client_fd, response, it->second.state.request.keep_alive);
 

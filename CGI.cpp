@@ -86,8 +86,8 @@ bool CGI::start(State &state)
             state.pipe_in[0] = -1;
             if (!request.body.empty()) {
                 ssize_t bytes_written = write(state.pipe_in[1], request.body.c_str(), request.body.size());
-                if (bytes_written != static_cast<ssize_t>(request.body.size())) // in case body 3imla9
-                    std::cerr << "CGI Warning: Could not write full body to CGI stdin" << std::endl;
+                if (bytes_written == -1)
+                    return false;
             }
             close(state.pipe_in[1]);
             state.pipe_in[1] = -1;
@@ -128,58 +128,67 @@ void CGI::childProcess(int pipe_in[2], int pipe_out[2], int pipe_err[2])
     exit(1);
 }
 
-bool CGI::handleOutput(State &state)
+void CGI::handleOutput(State &state)
 {
     if (state.process_complete)
-        return false;
+        return;
     
+    bool data_read = false;
     char buffer[65536];
-    ssize_t bytes_read;
-
-    
-    bytes_read = read(state.pipe_out[0], buffer, sizeof(buffer));
+    ssize_t bytes_read = read(state.pipe_out[0], buffer, sizeof(buffer));
     if (bytes_read > 0) {
-        state.output.append(buffer, bytes_read);
+        state.start_time = time(NULL);
+        state.stdout_output.append(buffer, bytes_read);
+        data_read = true;
+        
         if (!state.headers_complete) {
-            size_t header_end = state.output.find("\r\n\r\n");
+            size_t header_end = state.stdout_output.find("\r\n\r\n");
             if (header_end != std::string::npos) {
                 state.headers_complete = true;
-                std::string headers_str = state.output.substr(0, header_end);
+                std::string headers_str = state.stdout_output.substr(0, header_end);
                 state.cgi_headers = parseCGIHeaders(headers_str);
-
             }
         }
-        return true;
     }
-    else if (bytes_read == 0) {
-        close(state.pipe_out[0]);
-        state.pipe_out[0] = -1;
+    else if (bytes_read == 0) { // tanrje3 lik zakaria
+        // close(state.pipe_out[0]);
+        // state.pipe_out[0] = -1;
+    }
 
-        char err_buffer[65536];
-        ssize_t err_bytes_read = read(state.pipe_err[0], err_buffer, sizeof(err_buffer));
-        if (err_bytes_read == 0) {
-            close(state.pipe_err[0]);
-            state.pipe_err[0] = -1;
-        }
-        else if (err_bytes_read > 0) {
-            std::cerr << "CGI stderr: " << std::string(err_buffer, err_bytes_read) << std::endl;
-            if (state.output.empty()) {
-                state.output.append(err_buffer, err_bytes_read);
-                state.syntax_error = true;
-            }
-        }
-        // cleanup(state, true);
-        state.process_complete = true;
-        return false;
+    char err_buffer[65536];
+    ssize_t err_bytes_read = read(state.pipe_err[0], err_buffer, sizeof(err_buffer));
+    if (err_bytes_read > 0) {
+        state.stderr_output.append(err_buffer, err_bytes_read);
+        data_read = true;
     }
-    else if (bytes_read == -1) {
-        // perror("read from CGI");
-        // state.process_complete = true;
-        // cleanup(state, true);
-        return true;
+    else if (err_bytes_read == 0) { // you too zakaria
+        // close(state.pipe_err[0]);
+        // state.pipe_err[0] = -1;
     }
     
-    return false;
+    if ((state.pipe_out[0] == -1 && state.pipe_err[0] == -1) || !data_read) {
+        int status;
+        pid_t result = waitpid(state.pid, &status, WNOHANG);
+        
+        if (result > 0) {
+            state.process_complete = true;
+            
+            if (WIFEXITED(status)) {
+                state.exit_status = WEXITSTATUS(status);
+                if (state.exit_status != 0)
+                    state.syntax_error = true;
+            } 
+            else if (WIFSIGNALED(status)) // child killed by parent
+                state.syntax_error = true;
+        }
+        else if (result == -1) {
+            state.process_complete = true;
+            state.syntax_error = true;
+        }
+    }
+
+    if (bytes_read == -1 || err_bytes_read == -1)
+        return;
 }
 
 std::string CGI::getExtensionFromContentType(const std::string &content_type)
@@ -244,7 +253,7 @@ std::string CGI::buildErrorResponse(Server *server, State &state)
         << "<body>"
         << "<div class='error-box'>"
         << "<p><strong>"
-        << state.output
+        << state.stderr_output
         << "</strong>.</p>"
         << "</div>"
         << "</body>"
@@ -257,7 +266,7 @@ std::string CGI::buildErrorResponse(Server *server, State &state)
 
 std::string CGI::parseCGIOutput(State &state, bool &redirect, std::string &location)
 {
-    size_t header_end = state.output.find("\r\n\r\n");
+    size_t header_end = state.stdout_output.find("\r\n\r\n");
     if (header_end != std::string::npos)
     {
         for (size_t i = 0; i < state.cgi_headers.size(); i++)
@@ -270,10 +279,10 @@ std::string CGI::parseCGIOutput(State &state, bool &redirect, std::string &locat
             }
         }
         
-        return state.output.substr(header_end + 4);
+        return state.stdout_output.substr(header_end + 4);
     }
     
-    return state.output;
+    return state.stdout_output;
 }
 
 std::vector<std::pair<std::string, std::string> > CGI::parseCGIHeaders(std::string &headers)
@@ -316,7 +325,8 @@ void CGI::cleanup(State &state, bool kill_process)
     cleanupPipes(state.pipe_in, state.pipe_out, state.pipe_err);
     
     state.pid = -1;
-    state.output.clear();
+    state.stdout_output.clear();
+    state.stderr_output.clear();
     state.cgi_headers.clear();
 }
 
@@ -401,9 +411,9 @@ void CGI::setupServerEnvironment()
     std::string server_port = "80";
 
     // print request headers
-    for (std::map<std::string, std::string>::iterator it = request.headers.begin(); it != request.headers.end(); it++) {
-        std::cerr << "\nfirst: |" << it->first << "| second: |" <<  it->second << "|" ;
-    }
+    // for (std::map<std::string, std::string>::iterator it = request.headers.begin(); it != request.headers.end(); it++) {
+    //     std::cerr << "\nfirst: |" << it->first << "| second: |" <<  it->second << "|" ;
+    // }
         
     std::map<std::string, std::string>::iterator it = request.headers.find("host");
     if (it != request.headers.end())

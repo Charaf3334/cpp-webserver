@@ -84,7 +84,7 @@ to do:
 
 zakaria - cgi
     i should build a default working cgi files in cgi files final
-
+    exit status error page
     ✅query params
     ✅environment in cgi
     folder index.html
@@ -122,3 +122,5 @@ url enconding, browser kisendi special characters(space, <, >, ", #, %, {, }, |,
 # mhandliya rasha brasha
 
 movie stream dynamic
+
+time unlink gettimeofday not in the subject

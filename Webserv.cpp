@@ -452,7 +452,7 @@ void Webserv::read_file(void)
         throw std::runtime_error("Error: Multiple servers listen to same ports.");
     if (checkDuplicatePaths())
         throw std::runtime_error("Error: Server has the same location path multiple times.");
-    mergePaths();
+    // mergePaths();
     
     // print_conf();
 }

@@ -27,7 +27,8 @@ class CGI{
             int pipe_out[2];    // CGI stdout -> server
             int pipe_err[2];    // CGI stderr -> server
             int pipe_in[2];     // server -> CGI stdin (POST)
-            std::string output;
+            std::string stdout_output; 
+            std::string stderr_output;
             std::string script_path;
             std::string extension;
             Request request;
@@ -38,8 +39,9 @@ class CGI{
             time_t start_time;
             std::string cgi_path;
             bool syntax_error;
+            int exit_status;
             
-            State() : pid(-1), client_fd(-1), headers_complete(false), process_complete(false), response_sent_to_client(false), start_time(0), syntax_error(false)
+            State() : pid(-1), client_fd(-1), headers_complete(false), process_complete(false), response_sent_to_client(false), start_time(0), syntax_error(false), exit_status(-1)
             {
                 pipe_out[0] = pipe_out[1] = -1;
                 pipe_err[0] = pipe_err[1] = -1;
@@ -48,7 +50,7 @@ class CGI{
         };
 
     private:
-        Server *server; // Pointer to server for using buildResponse
+        Server *server;
         Request request;
         std::string script_path;
         std::string extension;
@@ -62,7 +64,6 @@ class CGI{
 
         static std::map<std::string, std::string> ext_map;
         
-        void setupPipes();
         void setupEnvironment();
         void setupAuthEnvironment();
         void setupServerEnvironment();
@@ -73,29 +74,21 @@ class CGI{
         void setupArguments();
         int  changeToScriptDirectory();
         void childProcess(int pipe_in[2], int pipe_out[2], int pipe_err[2]);
-        void parentProcess();
-        std::string parseCGIOutput(std::string &cgi_output);
-        void readFromPipes();
-        void handlePipeErrors();
         void assignExtension(void);
-        void cleanup();
         void cleanupPipes(int pipe_in[2], int pipe_out[2], int pipe_err[2]);
         
     public:
         CGI(Server *srv, Request &req, std::string &abs_path, std::string &extension);
         ~CGI();
         
-        // non blocking methods
         bool start(State &state);
-        bool handleOutput(State &state);
+        void handleOutput(State &state);
         void cleanup(State &state, bool kill_process = false);
         static std::string parseCGIOutput(State &state, bool &redirect, std::string &location);
-        static std::vector<std::pair<std::string, std::string> > parseCGIHeaders(std::string &headers);
-        
+        static std::vector<std::pair<std::string, std::string> > parseCGIHeaders(std::string &headers);      
         static std::string buildResponseFromState(Server *server, State &state, bool keep_alive);
         static std::string buildErrorResponse(Server *server, State &state);
         static std::string trim(std::string &s);
-
         static std::string getExtensionFromContentType(const std::string &content_type);
 };
 

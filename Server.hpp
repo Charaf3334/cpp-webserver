@@ -69,6 +69,7 @@ class Server : public Webserv
         bool shutdownFlag;
         std::vector<int> fileFdstoClose;
 
+        bool validURI(std::string uri);
         std::string decodeURI(std::string uri);
         std::vector<std::string> get_bodyheaders_Lines(const std::string req);
         std::string simplifyPath(std::string path);
@@ -91,7 +92,7 @@ class Server : public Webserv
         bool parse_methode(std::string *words, int &error_status, Request &request);
         bool parse_path(std::string &path);
         std::string tostring(size_t num) const;
-        bool serveClient(int client_fd, Request request);
+        bool serveClient(int client_fd, Request request, int epoll_fd);
         bool isUriExists(std::string uri, Webserv::Server server, bool flag) const;
         Webserv::Location getLocation(std::string uri, Webserv::Server server);
         bool atleastOneFileExists(Webserv::Location location) const;
@@ -112,10 +113,12 @@ class Server : public Webserv
             CgiState() : start_time(0), added_to_epoll(false) {}
         };
         std::map<int, CgiState> cgi_states; // Key:pipe_out[0] (read end)
-        bool setupCGI(Request &request, std::string &script_path, std::string &extension, int client_fd);
+        bool setupCGI(Request &request, std::string &script_path, std::string &extension, int client_fd, int epoll_fd);
         void handleCGIOutput(int epoll_fd, int pipe_fd);
         void cleanupCGI(int epoll_fd, int pipe_fd, bool kill_process = false);
         void checkTimeoutCGI(int epoll_fd);
+        std::string buildSearchingFile(std::string root, std::string uri, Location location);
+        void mergeIndexes(Location &location, std::string toSearch);
 
     public:
         std::string buildResponse(std::string body, std::string extension, int status, bool inRedirection, std::string newPath, bool keep_alive, const std::vector<std::pair<std::string, std::string> > &extra_headers = std::vector<std::pair<std::string, std::string> >());
