@@ -54,8 +54,8 @@ class Server : public Webserv
             Request request;
             bool keep_alive;
             int loop_counter;
-            bool start_counting;
-            int temporary_bytes;
+            bool packet_ended;
+            bool first_call;
         };
         std::map<int, sockaddr_in> client_addresses; // zakaria
         static Server* instance;

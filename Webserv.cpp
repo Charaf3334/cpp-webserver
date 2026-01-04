@@ -737,7 +737,7 @@ void Webserv::locationDefaultInit(Location &location)
     location.root = "";
     location.isRedirection = false;
     location.redirectionIsText = false;
-    location.upload_dir = "./uploads"; // default path
+    location.upload_dir = "/uploads"; // default path
     location.hasCgi = false;
     location.redirect_absolute = false;
     location.redirect_relative = false;

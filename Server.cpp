@@ -155,7 +155,7 @@ std::string Server::readRequest(int epoll_fd, int client_fd)
     std::string CRLF = "\r\n\r\n";
     client.just_parsed = false;
 
-    if (!client.has_start_time)
+    if (!client.first_call)
     {
         client.file_fd = -1;
         client.total_bytes_written = 0;
@@ -176,14 +176,14 @@ std::string Server::readRequest(int epoll_fd, int client_fd)
         client.boundary_found = false;
         client.just_took_headers = false;
         client.keep_alive = false;
-        client.start_counting = false;
-        client.temporary_bytes = 0;
+        client.packet_ended = true;
         client.end_boundary_found = false;
+        client.first_call = true;
     }
     while (1)
     {
         client.bytes = read(client_fd, client.buffer, sizeof(client.buffer));
-        if (client.bytes == -1 && client.temporary_body.empty())
+        if (client.bytes == -1 && client.packet_ended)
         {
             if (client.is_post)
             {
@@ -202,14 +202,7 @@ std::string Server::readRequest(int epoll_fd, int client_fd)
             return client.headers;
         }
         client.has_start_time = false;
-        if (client.start_counting)
-        {
-            if (client.bytes > 0)
-            {
-                client.total_bytes_written += client.temporary_bytes + client.bytes;
-                client.temporary_bytes = 0;
-            }
-        }
+        client.packet_ended = true;
         if (!client.isParsed)
         {
             client.headers = std::string(client.buffer, client.bytes);
@@ -225,8 +218,8 @@ std::string Server::readRequest(int epoll_fd, int client_fd)
             client.isParsed = true;
             client.just_parsed = true;
             client.temporary_body = client.headers.substr(CRLF_pos + 4);
-            client.temporary_bytes = client.temporary_body.size();
-            client.start_counting = true;
+            if (!client.temporary_body.empty())
+                client.packet_ended = false;
             client.headers = client.headers.substr(0, CRLF_pos + 4);
             std::string lowercase_headers = str_tolower(client.headers);
             size_t content_length_position = lowercase_headers.find("content-length:");
@@ -371,10 +364,7 @@ std::string Server::readRequest(int epoll_fd, int client_fd)
             }
         }
         if (!client.is_post)
-        {
-            client.temporary_body = "";
             continue;
-        }
         if (client.content_lenght_present && client.is_post && client.request.is_uri_dir)
         {
             if (client.bytes == -1)
@@ -397,6 +387,7 @@ std::string Server::readRequest(int epoll_fd, int client_fd)
                         return "";
                     }
                     client.temporary_body = client.body_buffer;
+                    client.packet_ended = false;
                     continue;
                 }
                 client.loop_counter = 0;
@@ -449,6 +440,9 @@ std::string Server::readRequest(int epoll_fd, int client_fd)
                     return "";
                 }
                 client.temporary_body = client.body_buffer.substr(body_crlf + 4);
+                if (!client.temporary_body.empty())
+                    client.packet_ended = false;
+                client.total_bytes_written += body_headers_string.size();
                 client.request.body_headers_done = true;
                 continue;
             }
@@ -458,7 +452,10 @@ std::string Server::readRequest(int epoll_fd, int client_fd)
             {
                 client.to_write = client.body_buffer.substr(0, boundry_pos);
                 client.temporary_body = client.body_buffer.substr(boundry_pos + 2);
+                if (!client.temporary_body.empty())
+                    client.packet_ended = false;
                 client.request.body_headers_done = false;
+                client.total_bytes_written += 2;
             }
             else if (end_boundry_pos != std::string::npos)
             {
@@ -472,6 +469,7 @@ std::string Server::readRequest(int epoll_fd, int client_fd)
                     client.keep_alive = client.request.keep_alive;
                     return "";
                 }
+                client.total_bytes_written += client.request.body_boundary.size() + 6;
                 client.boundary_found = true;
                 client.end_boundary_found = true;
             }
@@ -482,15 +480,8 @@ std::string Server::readRequest(int epoll_fd, int client_fd)
                     client.to_write = client.body_buffer;
                 else
                 {
-                    if (client.bytes == -1)
-                    {
-                        std::string response = buildResponse(buildErrorPage(400), ".html", 400, false, "", client.request.keep_alive);
-                        sendResponse(client_fd, response, client.request.keep_alive);
-                        client.is_request_full = true;
-                        client.keep_alive = client.request.keep_alive;
-                        return "";
-                    }
                     client.temporary_body = client.body_buffer.substr(r_pos);
+                    client.packet_ended = true;
                     if (client.temporary_body.size() > client.request.body_boundary.size() + 6)
                     {
                         client.to_write = client.body_buffer;
@@ -528,6 +519,7 @@ std::string Server::readRequest(int epoll_fd, int client_fd)
                     }
                 }
             }
+            client.total_bytes_written += client.to_write.size();
             if (client.boundary_found)
             {
                 if (!client.request.body_headers_done)
@@ -635,7 +627,7 @@ std::string Server::readRequest(int epoll_fd, int client_fd)
                         client.is_request_full = true;
                         break;
                     }
-                    else if (!client.end_boundary_found && client.temporary_body.empty())
+                    else if (!client.end_boundary_found)
                     {
                         std::string response = buildResponse(buildErrorPage(400), ".html", 400, false, "", false);
                         sendResponse(client_fd, response, false);
