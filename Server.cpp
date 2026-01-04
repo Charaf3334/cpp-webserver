@@ -737,23 +737,22 @@ bool Server::validURI(std::string uri)
     return true;
 }
 
+bool Server::allUppercase(std::string method)
+{
+    size_t count = 0;
+    for (size_t i = 0; i < method.length(); i++)
+    {
+        if (isupper(method[i]))
+            count++;
+    }
+    return count == method.length();
+}
+
 bool Server::parse_methode(std::string *words, int &error_status, Request &request)
 {
     std::string http_versions[] = {"HTTP/0.9", "HTTP/1.0", "HTTP/1.1", "HTTP/2.0", "HTTP/3.0"};
     size_t http_versions_length = sizeof(http_versions) / sizeof(http_versions[0]);
-    std::string http_methodes[] = {"GET", "POST", "DELETE", "PATCH", "PUT", "HEAD", "OPTIONS"};
-    size_t http_methodes_length = sizeof(http_methodes) / sizeof(http_methodes[0]);
-    for (size_t j = 0; j < http_methodes_length; j++)
-    {
-        if (words[0] == http_methodes[j])
-            break;
-        if (j == 6)
-        {
-            error_status = 400;
-            return false;
-        }
-    }
-    if (words[0] == "PATCH" || words[0] == "PUT" || words[0] == "HEAD" || words[0] == "OPTIONS")
+    if (allUppercase(words[0]) && words[0] != "GET" && words[0] != "POST" && words[0] != "DELETE")
     {
         error_status = 501;
         return false;

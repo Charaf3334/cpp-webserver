@@ -124,3 +124,10 @@ url enconding, browser kisendi special characters(space, <, >, ", #, %, {, }, |,
 movie stream dynamic
 
 time unlink gettimeofday not in the subject
+
+
+charaf:
+    REQUEST LINE: 
+        METHOD SP URI SP HTTP/1.0
+    remove -> unlink
+    time functions for timeout

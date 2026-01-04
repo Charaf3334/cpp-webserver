@@ -69,6 +69,7 @@ class Server : public Webserv
         bool shutdownFlag;
         std::vector<int> fileFdstoClose;
 
+        bool allUppercase(std::string method);
         bool validURI(std::string uri);
         std::string decodeURI(std::string uri);
         std::vector<std::string> get_bodyheaders_Lines(const std::string req);
