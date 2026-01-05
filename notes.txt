@@ -80,14 +80,18 @@ to do:
 
         Error: Bad Request
 
+movie stream dynamic
+
+charaf:
+    tibarike: "GET / HTTP/1.0\r\nzakaria:  hh \r\n\r\n" spaces after dopwan 
 
 
-zakaria - cgi
+    zakaria - cgi
     i should build a default working cgi files in cgi files final
     exit status error page
+    error page
     ✅query params
     ✅environment in cgi
-    folder index.html
     ✅register/login pirate stream
     
     ✅: decodeURI: /autoindex/upload/Client_10/hair%20wrap.png -> GET hair wrap.png -> is this correct :
@@ -96,38 +100,14 @@ zakaria - cgi
         request.uri: /autoindex/upload/Client_10/hair wrap.png
 
 
-
-/                -> root/index
-/path/           -> root/path/index
-/path/file.conf  -> root/path/file.conf
-/path/file.conf/ -> root/path/file.conf/index
-
 l9raya
 testat
 
-    
-TASA2OLAT: 
-    location / {
-        root /home/zguellou/Documents/jdida/prod;
-        allow_methods GET POST;
-        index login.php;
-        cgi on;
-    }
-
-PROMO 9DIMA:
-    mo3dila: /cgi-bin/script.cgi/foo/bar this is not a valid request -> https://datatracker.ietf.org/doc/html/rfc1945#section-5.1, but in cgi rfc kihandliha -> https://datatracker.ietf.org/doc/html/rfc3875#section-4.1.6
 
 url enconding, browser kisendi special characters(space, <, >, ", #, %, {, }, |, \, ^, ~, [, ], `) as % encoding, o7naya kandecodiwhom, saad lli ay3tina ras lkhit
 
-# mhandliya rasha brasha
-
 movie stream dynamic
 
-time unlink gettimeofday not in the subject
 
-
-charaf:
-    REQUEST LINE: 
-        METHOD SP URI SP HTTP/1.0
-    remove -> unlink
-    time functions for timeout
+DEFENSE:
+    -why didn't you handle absolute uri in your server? According to the rfc, absolute uri is only allowed when the request is being made to a proxy. And this is not a proxy, this is a werbserver you piece of shit | https://datatracker.ietf.org/doc/html/rfc1945#section-5.1.2
