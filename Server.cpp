@@ -175,7 +175,6 @@ std::string Server::readRequest(int epoll_fd, int client_fd)
     client_read &client = read_states[client_fd];
     Webserv::Server server = *clientfd_to_server[client_fd];
     std::string CRLF = "\r\n\r\n";
-    client.just_parsed = false;
 
     if (!client.first_call)
     {
@@ -185,10 +184,8 @@ std::string Server::readRequest(int epoll_fd, int client_fd)
         client.is_request_full = false;
         client.headers = "";
         client.temporary_body = "";
-        client.temporary_body_check = "";
         client.isParsed = false;
         client.content_lenght_present = false;
-        client.first_time = 0;
         client.loop_counter = 0;
         client.is_post = false;
         client.request.is_uri_dir = false;
@@ -196,7 +193,6 @@ std::string Server::readRequest(int epoll_fd, int client_fd)
         client.request.body_headers_done = false;
         client.temporary_body = "";
         client.boundary_found = false;
-        client.just_took_headers = false;
         client.keep_alive = false;
         client.packet_ended = true;
         client.end_boundary_found = false;
@@ -238,7 +234,6 @@ std::string Server::readRequest(int epoll_fd, int client_fd)
                 return "";
             }
             client.isParsed = true;
-            client.just_parsed = true;
             client.temporary_body = client.headers.substr(CRLF_pos + 4);
             if (!client.temporary_body.empty())
                 client.packet_ended = false;
@@ -329,8 +324,6 @@ std::string Server::readRequest(int epoll_fd, int client_fd)
                     client.keep_alive = client.request.keep_alive;
                     return "";
                 }
-                if (client.request.location.upload_dir[0] == '.')
-                    client.request.location.upload_dir = client.request.location.upload_dir.substr(1);
                 client.request.location.upload_dir = client.request.location.root + client.request.location.upload_dir;
                 std::string upload_dir = client.request.location.upload_dir;
                 if (stat(upload_dir.c_str(), &st) == -1)
@@ -389,6 +382,13 @@ std::string Server::readRequest(int epoll_fd, int client_fd)
         }
         if (!client.is_post)
             continue;
+        if (client.is_post && !client.content_lenght_present)
+        {
+            std::string response = buildResponse(buildErrorPage(400), ".html", 400, false, "", false);
+            sendResponse(client_fd, response, false);
+            client.is_request_full = true;
+            return "";
+        }
         if (client.content_lenght_present && client.is_post && client.request.is_uri_dir)
         {
             if (client.bytes == -1)
@@ -440,18 +440,38 @@ std::string Server::readRequest(int epoll_fd, int client_fd)
                 size_t filename_pos = client.request.body_headers["content-disposition"].find("filename=");
                 if (filename_pos == std::string::npos)
                 {
-                    std::string response = buildResponse(buildErrorPage(400), ".html", 400, false, "", client.request.keep_alive);
-                    sendResponse(client_fd, response, client.request.keep_alive);
-                    client.is_request_full = true;
-                    client.keep_alive = client.request.keep_alive;
-                    return "";
+                    int i = 0;
+                    while (client.request.body_boundary[i] == '-')
+                        i++;
+                    client.request.bodyfile_name = client.request.body_boundary.substr(i);
                 }
-                client.request.bodyfile_name = client.request.body_headers["content-disposition"].substr(filename_pos + 9);
-                client.request.bodyfile_name.erase(0, 1);
-                client.request.bodyfile_name.erase(client.request.bodyfile_name.size() - 1, 1);
-                std::string upload_dir = client.request.location.upload_dir + "/" + "Client_" + tostring(client_fd);
-                mkdir(upload_dir.c_str(), 0777);
-                std::string upload_file = upload_dir + "/" + client.request.bodyfile_name;
+                else
+                {
+                    client.request.bodyfile_name = client.request.body_headers["content-disposition"].substr(filename_pos + 9);
+                    client.request.bodyfile_name.erase(0, 1);
+                    client.request.bodyfile_name.erase(client.request.bodyfile_name.size() - 1, 1);
+                }
+                if (access((client.request.location.upload_dir + "/" + client.request.bodyfile_name).c_str(), F_OK) == 0)
+                {
+                    size_t dot_pos = client.request.bodyfile_name.find_last_of(".");
+                    if (dot_pos == std::string::npos)
+                        dot_pos = client.request.bodyfile_name.size();
+                    int i = 1;
+                    while (1)
+                    {
+                        std::string str_num = tostring(i);
+                        client.request.bodyfile_name.insert(dot_pos, "(" + str_num + ")");
+                        if (access((client.request.location.upload_dir + "/" + client.request.bodyfile_name).c_str(), F_OK) == 0)
+                        {
+                            int last_dot_pos = client.request.bodyfile_name.find_last_of("(" + str_num + ")");
+                            client.request.bodyfile_name.erase(last_dot_pos - str_num.size() - 1, str_num.size() + 2);
+                            i++;
+                            continue;
+                        }
+                        break;
+                    }
+                }
+                std::string upload_file = client.request.location.upload_dir + "/" + client.request.bodyfile_name;
                 if (client.file_fd != -1)
                     close(client.file_fd);
                 client.file_fd = open(upload_file.c_str(), O_CREAT | O_WRONLY | O_TRUNC, 0644);
@@ -610,13 +630,6 @@ std::string Server::readRequest(int epoll_fd, int client_fd)
                     return "";
                 }
             }
-        if (client.is_post && !client.content_lenght_present)
-        {
-            std::string response = buildResponse(buildErrorPage(400), ".html", 400, false, "", false);
-            sendResponse(client_fd, response, false);
-            client.is_request_full = true;
-            return "";
-        }
             //===================================================POST END===============================================================
         if (client.isParsed)
         {
@@ -661,7 +674,7 @@ std::string Server::readRequest(int epoll_fd, int client_fd)
                     }
                 }
             }
-            else if (client.total_bytes_written < client.content_len) // tibarike
+            else if (client.total_bytes_written < client.content_len)
                 continue;
         }
     }
@@ -1494,7 +1507,7 @@ bool Server::serveClient(int client_fd, Request request, int epoll_fd)
                     std::string response = buildResponse(buildErrorPage(403), ".html", 403, false, "", request.keep_alive);
                     return sendResponse(client_fd, response, request.keep_alive);
                 }
-                if (unlink(filepath.c_str()) != 0)
+                if (std::remove(filepath.c_str()) != 0)
                 {
                     std::string response = buildResponse(buildErrorPage(403), ".html", 403, false, "", request.keep_alive);
                     return sendResponse(client_fd, response, request.keep_alive);
