@@ -119,7 +119,8 @@ std::string Server::buildResponse(std::string body, std::string extension, int s
     if (content_type.count(extension))
         type = content_type[extension];
     response += "Date: " + currentDate() + CRLF;
-    response += "Content-Type: " + type + CRLF;
+    if (status != 204) // no content must not set content type
+        response += "Content-Type: " + type + CRLF;
     if (inRedirection)
         response += "Location: " + newPath + CRLF;
 
@@ -729,13 +730,8 @@ bool Server::parse_path(std::string &path)
 {
     if (path.empty() || path[0] != '/')
         return false;
-    if (path.find("//") != std::string::npos)
+    if (path.length() >= 2 && path[0] == '/' && path[1] == '/') // net path
         return false;
-    // for (size_t i = 0; i < path.length(); i++)
-    // {
-    //     if (!isalnum(path[i]) && path[i] != '/' && path[i] != '_' && path[i] != '-' && path[i] != '.' && path[i] != '&' && path[i] != '=' && path[i] != '?')
-    //         return false;
-    // }
     return true;
 }
 
@@ -825,12 +821,26 @@ bool Server::parse_methode(std::string *words, int &error_status, Request &reque
         return false;
     }
     request.uri = decodeURI(words[1]);
-    size_t pos = request.uri.find("?");
-    if (pos != std::string::npos)
+    // [ path ] [ ";" params ] [ "?" query ]
+    size_t fragment_pos = request.queries.find("#");
+    if (fragment_pos != std::string::npos)
+        request.uri = request.uri.substr(0, fragment_pos);
+
+    size_t quest_pos = request.uri.find("?");
+    if (quest_pos != std::string::npos)
     {
-        request.queries = request.uri.substr(pos + 1);
-        request.uri = request.uri.substr(0, pos);
+        request.queries = request.uri.substr(quest_pos + 1);
+        request.uri = request.uri.substr(0, quest_pos);
     }
+    size_t semicolon_pos = request.uri.find(";");
+    if (semicolon_pos != std::string::npos)
+    {
+        request.params = request.uri.substr(semicolon_pos + 1);
+        request.uri = request.uri.substr(0, semicolon_pos);
+    }
+    // std::cout << "request.uri    : " << request.uri << std::endl;
+    // std::cout << "request.params : " << request.params << std::endl;
+    // std::cout << "request.queries: " << request.queries << std::endl;
     request.http_version = words[2];
     return true;
 }

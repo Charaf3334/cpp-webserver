@@ -26,6 +26,8 @@ struct Request
     bool body_headers_done;
     Webserv::Location location;
     std::string queries;
+    std::string params;
+
 };
 
 #endif
