@@ -3,6 +3,13 @@
 
 std::map<std::string, std::string> CGI::ext_map;
 
+CGI::State::State() : pid(-1), client_fd(-1), headers_complete(false), process_complete(false), response_sent_to_client(false), start_time(0), syntax_error(false), exit_status(-1)
+{
+    pipe_out[0] = pipe_out[1] = -1;
+    pipe_err[0] = pipe_err[1] = -1;
+    pipe_in[0] = pipe_in[1] = -1;
+}
+
 std::string CGI::trim(std::string &s)
 {
     std::string result = s;
@@ -513,15 +520,16 @@ void CGI::convertEnvVarsToCharPtr()
 void CGI::setupArguments()
 {
     // cgi/path + script/location + NULL for python script
-    argv = new char *[3];
+    std::vector<std::string> args(3);
+    args.push_back(cgi_path);
+    args.push_back(script_path);
 
-    argv[0] = new char[cgi_path.size() + 1];
-    std::strcpy(argv[0], cgi_path.c_str());
+    argv = new char*[args.size() + 1];
 
-    argv[1] = new char[script_path.size() + 1];
-    std::strcpy(argv[1], script_path.c_str());
+    for (size_t i = 0; i < args.size(); i++)
+        argv[i] = const_cast<char *>(args[i].c_str());
 
-    argv[2] = NULL;
+    argv[args.size()] = NULL;
 }
 
 int CGI::changeToScriptDirectory() // what if the script includes another file (includes "./index.js")
@@ -532,7 +540,7 @@ int CGI::changeToScriptDirectory() // what if the script includes another file (
         std::string dir = script_path.substr(0, last_slash);
         if (chdir(dir.c_str()) == -1)
         {
-            std::cerr << "Error: CGI: Failed to change to directory: " << dir << " - " << strerror(errno) << std::endl;
+            std::cerr << "Error: CGI: Failed to change to directory: " << dir << std::endl;
             return 1;
         }
     }

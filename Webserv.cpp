@@ -561,22 +561,35 @@ bool Webserv::checkSemicolon(void) const
     return true;
 }
 
+
+std::string Webserv::getAddress(sockaddr_in *addr)
+{
+    std::stringstream ip_string;
+    unsigned int ip = ntohl(addr->sin_addr.s_addr);
+
+    char *parts = reinterpret_cast<char *>(&ip);
+    unsigned char forth = parts[0];
+    unsigned char third = parts[1];
+    unsigned char second = parts[2];
+    unsigned char first = parts[3];
+    ip_string << static_cast<int>(first) << "." << static_cast<int>(second) << "." << static_cast<int>(third) << "." << static_cast<int>(forth);
+    return ip_string.str();
+}
+
 std::string Webserv::convertHostToIp(const std::string host, const std::string message)
 {
-    struct addrinfo hints;
-    struct addrinfo *res = NULL;
+    addrinfo hints;
+    addrinfo *result = NULL;
     memset(&hints, 0, sizeof(hints));
     hints.ai_family = AF_INET;
     hints.ai_socktype = SOCK_STREAM;
 
-    int status = getaddrinfo(host.c_str(), NULL, &hints, &res);
-    if (status != 0 || res == NULL)
+    int status = getaddrinfo(host.c_str(), NULL, &hints, &result);
+    if (status != 0 || result == NULL)
         throw std::runtime_error(message);
-    char ip_string[INET_ADDRSTRLEN];
-    struct sockaddr_in *ipv4 = reinterpret_cast<struct sockaddr_in *>(res->ai_addr);
-    inet_ntop(AF_INET, &(ipv4->sin_addr), ip_string, sizeof(ip_string));
-    freeaddrinfo(res);
-    return std::string(ip_string);
+    sockaddr_in *address = reinterpret_cast<sockaddr_in *>(result->ai_addr);
+    freeaddrinfo(result);
+    return getAddress(address);
 }
 
 bool Webserv::checkHost(const std::string host, bool &isHost) const
@@ -606,12 +619,31 @@ bool Webserv::checkHost(const std::string host, bool &isHost) const
     return true;
 }
 
-bool Webserv::isValidIp(std::string ip) const
+int Webserv::isValidIp(std::string ip) const
 {
-    struct in_addr ipv4;
-    if (inet_pton(AF_INET, ip.c_str(), &ipv4) == 1)
-        return true;
-    return false;
+    size_t counter = 0;
+
+    for (size_t i = 0; i < ip.length(); i++)
+    {
+        if (!isdigit(ip[i]) && ip[i] != '.')
+            return -1;
+    }
+    if (std::count(ip.begin(), ip.end(), '.') != 3)
+        return -2;
+    size_t pos = ip.find('.');
+    while (pos != std::string::npos)
+    {
+        std::string part = ip.substr(0, pos);
+        if (part.length() && (std::atoll(part.c_str()) >= 0 && std::atoll(part.c_str()) <= 255))
+            counter++;
+        ip = ip.substr(pos + 1);
+        pos = ip.find('.');
+    }
+    if (ip.length() && (std::atoll(ip.c_str()) >= 0 && std::atoll(ip.c_str()) <= 255))
+        counter++;
+    if (counter == 4)
+        return 1;
+    return -2;
 }
 
 bool Webserv::checkValidListen(const std::string s, bool &isHost) const
@@ -634,7 +666,10 @@ bool Webserv::checkValidListen(const std::string s, bool &isHost) const
         if (!isdigit(p[i]))
             return false;
     long port = atol(p.c_str());
-    if (!isValidIp(ip) && !checkHost(ip, isHost))
+    int res = isValidIp(ip);
+    if (res == -1 && !checkHost(ip, isHost)) // -1 not a valid ip address
+        return false;
+    if (res == -2)
         return false;
     if (port < 0 || port > 65535)
         return false;

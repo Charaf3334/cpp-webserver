@@ -1,24 +1,13 @@
 #ifndef CGI_HPP
 #define CGI_HPP
 
-#include <string>
-#include <map>
-#include <vector>
-#include <iostream>
-#include <sstream>
-#include <cstdlib>
-#include <cstring>
-#include <unistd.h>
 #include <sys/wait.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
 #include "Webserv.hpp"
 #include "Request.hpp" 
 
 class Server;
 
-class CGI{
+class CGI {
     public:
         struct State
         {
@@ -40,13 +29,7 @@ class CGI{
             std::string cgi_path;
             bool syntax_error;
             int exit_status;
-            
-            State() : pid(-1), client_fd(-1), headers_complete(false), process_complete(false), response_sent_to_client(false), start_time(0), syntax_error(false), exit_status(-1)
-            {
-                pipe_out[0] = pipe_out[1] = -1;
-                pipe_err[0] = pipe_err[1] = -1;
-                pipe_in[0] = pipe_in[1] = -1;
-            }
+            State();
         };
 
     private:
@@ -58,9 +41,6 @@ class CGI{
         std::vector<std::string> env_vars;
         char **env_cgi;
         char **argv;
-        
-        std::string cgi_output;
-        std::string error_output;
 
         static std::map<std::string, std::string> ext_map;
         

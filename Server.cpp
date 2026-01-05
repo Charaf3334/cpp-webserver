@@ -11,6 +11,7 @@ Server::Server(Webserv webserv) : Webserv(webserv)
 
 Server::Server(const Server &theOtherObject) : Webserv(theOtherObject)
 {
+
 }
 
 Server &Server::operator=(const Server &theOtherObject)
@@ -18,6 +19,11 @@ Server &Server::operator=(const Server &theOtherObject)
     if (this != &theOtherObject)
         static_cast<void>(theOtherObject);
     return *this;
+}
+
+Server::CgiState::CgiState() : start_time(0), added_to_epoll(false)
+{
+
 }
 
 Server::~Server()
@@ -35,13 +41,29 @@ bool Server::setNonBlockingFD(const int fd) const
     return true;
 }
 
-sockaddr_in Server::infos(const Webserv::Server server) const
+unsigned int Server::getBinaryAddress(std::string address)
+{
+    size_t pos = address.find('.');
+    int shift = 24;
+    unsigned int result = 0;
+    while (pos != std::string::npos || shift >= 0)
+    {
+        int part = std::atoll(address.substr(0, pos).c_str());
+        result |= (part << shift);
+        address = address.substr(pos + 1);
+        pos = address.find('.');
+        shift -= 8;
+    }
+    return htonl(result);
+}
+
+sockaddr_in Server::infos(const Webserv::Server server)
 {
     sockaddr_in address;
 
     memset(&address, 0, sizeof(address));
     address.sin_family = AF_INET;
-    address.sin_addr.s_addr = inet_addr(server.ip_address.c_str());
+    address.sin_addr.s_addr = getBinaryAddress(server.ip_address);
     address.sin_port = htons(server.port);
     return address;
 }
@@ -187,7 +209,7 @@ std::string Server::readRequest(int epoll_fd, int client_fd)
         {
             if (client.is_post)
             {
-                gettimeofday(&client.start_time, NULL);
+                client.start_time = std::time(NULL);
                 client.has_start_time = true;
                 client.is_request_full = false;
             }
@@ -307,6 +329,8 @@ std::string Server::readRequest(int epoll_fd, int client_fd)
                     client.keep_alive = client.request.keep_alive;
                     return "";
                 }
+                if (client.request.location.upload_dir[0] == '.')
+                    client.request.location.upload_dir = client.request.location.upload_dir.substr(1);
                 client.request.location.upload_dir = client.request.location.root + client.request.location.upload_dir;
                 std::string upload_dir = client.request.location.upload_dir;
                 if (stat(upload_dir.c_str(), &st) == -1)
@@ -882,6 +906,35 @@ bool Server::parse_headers(std::string &line, std::map<std::string, std::string>
     return true;
 }
 
+bool Server::isRequestLineValid(std::string request_line)
+{
+    size_t i = 0;
+    while (i < request_line.length() && isspace(request_line[i]))
+        i++;
+    if (i > 0)
+        return false;
+    while (i < request_line.length() && !isspace(request_line[i]))
+        i++;
+    size_t j = i;
+    while (j < request_line.length() && isspace(request_line[j]))
+        j++;
+    if (j - i != 1)
+        return false;
+    i = j;
+    while (i < request_line.length() && !isspace(request_line[i]))
+        i++;
+    j = i;
+    while (j < request_line.length() && isspace(request_line[j]))
+        j++;
+    if (j - i != 1)
+        return false;
+    i = j;
+    std::string last = request_line.substr(i);
+    if (isspace(last[last.length() - 1]))
+        return false;
+    return true;
+}
+
 bool Server::parse_lines(std::vector<std::string> lines, Request &request, int &error_status)
 {
     std::string *words;
@@ -889,6 +942,11 @@ bool Server::parse_lines(std::vector<std::string> lines, Request &request, int &
     {
         if (i == 0)
         {
+            if (!isRequestLineValid(lines[i]))
+            {
+                error_status = 400;
+                return false;
+            }
             size_t size = countParts(lines[i]);
             words = split(lines[i]);
             if (size != 3)
@@ -954,13 +1012,10 @@ bool Server::parseRequest(int client_fd, std::string request_string, Request &re
     request.keep_alive = false;
     if (found != request.headers.end() && found->second == "keep-alive")
         request.keep_alive = true;
-
     if (client_addresses.find(client_fd) != client_addresses.end())
-    { // zakaria
+    {
         sockaddr_in addr = client_addresses[client_fd];
-        char ip_str[INET_ADDRSTRLEN];
-        inet_ntop(AF_INET, &addr.sin_addr, ip_str, sizeof(ip_str));
-        request.remote_addr = ip_str;
+        request.remote_addr = getAddress(&addr);
         request.remote_port = ntohs(addr.sin_port);
     }
     else
@@ -968,7 +1023,6 @@ bool Server::parseRequest(int client_fd, std::string request_string, Request &re
         request.remote_addr = "127.0.0.1";
         request.remote_port = 0;
     }
-
     return true;
 }
 
@@ -1472,8 +1526,7 @@ void Server::closeClient(int epoll_fd, int client_fd, bool inside_loop)
 
 void Server::checkTimeoutClients(int epoll_fd)
 {
-    struct timeval currentTime;
-    gettimeofday(&currentTime, NULL);
+    time_t currentTime = std::time(NULL);
     std::map<int, client_read>::iterator it = read_states.begin();
     std::vector<int> fdsToClose;
 
@@ -1483,8 +1536,8 @@ void Server::checkTimeoutClients(int epoll_fd)
         client_read &client_ref = it->second;
         if (client_ref.has_start_time)
         {
-            long passed_time = ((currentTime.tv_sec - client_ref.start_time.tv_sec) * 1000) + ((currentTime.tv_usec - client_ref.start_time.tv_usec) / 1000);
-            if (passed_time > 3000)
+            double passed_time = difftime(currentTime, client_ref.start_time);
+            if (passed_time > 3)
             {
                 std::string response = buildResponse(buildErrorPage(400), ".html", 400, false, "", false);
                 sendResponse(client_fd, response, false);
@@ -1716,10 +1769,7 @@ void Server::initialize(void)
                 if (client_fd != -1)
                 {
                     client_addresses[client_fd] = client_addr; // zakaria
-                    char client_ip[INET_ADDRSTRLEN];
-                    inet_ntop(AF_INET, &client_addr.sin_addr, client_ip, sizeof(client_ip));
-                    int client_port = ntohs(client_addr.sin_port);
-                    std::cout << "New client " << client_fd << " connected from: " << client_ip << ":" << client_port << std::endl;
+                    std::cout << "New client " << client_fd << " connected from " << getAddress(&client_addr) << ":" << ntohs(client_addr.sin_port) << std::endl;
                     setNonBlockingFD(client_fd);
                     this->clientfd_to_server[client_fd] = this->sockfd_to_server[fd];
                     this->client_fds.push_back(client_fd);
@@ -1873,7 +1923,7 @@ void Server::cleanupCGI(int epoll_fd, int pipe_fd, bool kill_process)
 
     CGI cgi(this, cgi_state.state.request, cgi_state.state.script_path, cgi_state.state.extension);
 
-    if (cgi_state.added_to_epoll) // keep alive from request zakaria
+    if (cgi_state.added_to_epoll)
     {
         epoll_ctl(epoll_fd, EPOLL_CTL_DEL, pipe_fd, NULL);
         cgi_state.added_to_epoll = false;
@@ -1890,7 +1940,7 @@ void Server::checkTimeoutCGI(int epoll_fd)
 
     for (std::map<int, CgiState>::iterator it = cgi_states.begin(); it != cgi_states.end(); it++)
     {
-        if (difftime(now, it->second.start_time) > CGI_TIMEOUT)
+        if (difftime(now, it->second.start_time) > 3)
         {
             std::cerr << "CGI timeout for PID " << it->second.state.pid << std::endl;
             it->second.state.process_complete = true;

@@ -71,7 +71,7 @@ class Webserv
         bool isFileEmpty(void);
         bool checkSemicolon(void) const;
         bool checkValidListen(const std::string s, bool &isHost) const;
-        bool isValidIp(const std::string ip) const;
+        int isValidIp(const std::string ip) const;
         bool checkHost(const std::string host, bool &isHost) const;
         std::string convertHostToIp(const std::string host, const std::string message);
         void serverDefaultInit(Webserv::Server &server);
@@ -94,6 +94,7 @@ class Webserv
         void print_conf(void);
         void sortLocationPaths(Webserv::Server &server);
         static bool locationCmp(const Webserv::Location &l1, const Webserv::Location &l2);
+        std::string getAddress(sockaddr_in *addr);
     public:
         Webserv();
         Webserv(const std::string config_file_path);

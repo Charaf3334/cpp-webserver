@@ -5,7 +5,6 @@
 #include "CGI.hpp"
 
 #define MAX_EVENTS 64
-#define CGI_TIMEOUT 3
 
 class Server : public Webserv
 {
@@ -50,12 +49,19 @@ class Server : public Webserv
             std::string body_buffer; 
             std::string to_write;
             char buffer[20480];
-            struct timeval start_time;
+            time_t start_time;
             Request request;
             bool keep_alive;
             int loop_counter;
             bool packet_ended;
             bool first_call;
+        };
+        struct CgiState
+        {
+            CGI::State state;
+            time_t start_time;
+            bool added_to_epoll;
+            CgiState();
         };
         std::map<int, sockaddr_in> client_addresses; // zakaria
         static Server* instance;
@@ -68,7 +74,10 @@ class Server : public Webserv
         std::map<int, Request*> clientfd_to_request;
         bool shutdownFlag;
         std::vector<int> fileFdstoClose;
+        std::map<int, CgiState> cgi_states; // Key:pipe_out[0] (read end)
 
+        bool isRequestLineValid(std::string request_line);
+        unsigned int getBinaryAddress(std::string address);
         bool allUppercase(std::string method);
         bool validURI(std::string uri);
         std::string decodeURI(std::string uri);
@@ -77,7 +86,7 @@ class Server : public Webserv
         void checkTimeoutClients(int epoll_fd);
         std::string currentDate(void) const;
         bool setNonBlockingFD(const int fd) const;
-        sockaddr_in infos(const Webserv::Server server) const;
+        sockaddr_in infos(const Webserv::Server server);
         void closeSockets(void);
         static void handlingSigint(int sig);
         std::string readRequest(int epoll_fd, int client_fd);
@@ -104,16 +113,6 @@ class Server : public Webserv
         bool continueSending(int client_fd);
         void modifyEpollEvents(int epoll_fd, int client_fd, unsigned int events);
         bool sendFileResponse(int client_fd, const std::string file_path, const std::string extension, int status, bool keep_alive, const std::vector<std::pair<std::string, std::string> > &extra_headers = std::vector<std::pair<std::string, std::string> >());
-
-        struct CgiState // cgi 
-        {
-            CGI::State state;
-            time_t start_time;
-            bool added_to_epoll;
-
-            CgiState() : start_time(0), added_to_epoll(false) {}
-        };
-        std::map<int, CgiState> cgi_states; // Key:pipe_out[0] (read end)
         bool setupCGI(Request &request, std::string &script_path, std::string &extension, int client_fd, int epoll_fd);
         void handleCGIOutput(int epoll_fd, int pipe_fd);
         void cleanupCGI(int epoll_fd, int pipe_fd, bool kill_process = false);
