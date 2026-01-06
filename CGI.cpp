@@ -157,10 +157,8 @@ void CGI::handleOutput(State &state)
             }
         }
     }
-    else if (bytes_read == 0) { // tanrje3 lik zakaria
-        // close(state.pipe_out[0]);
-        // state.pipe_out[0] = -1;
-    }
+    else if (bytes_read == 0) {} // write end in child closed
+    else if (bytes_read == -1) {} // read it ta salit
 
     char err_buffer[65536];
     ssize_t err_bytes_read = read(state.pipe_err[0], err_buffer, sizeof(err_buffer));
@@ -168,19 +166,17 @@ void CGI::handleOutput(State &state)
         state.stderr_output.append(err_buffer, err_bytes_read);
         data_read = true;
     }
-    else if (err_bytes_read == 0) { // you too zakaria
-        // close(state.pipe_err[0]);
-        // state.pipe_err[0] = -1;
-    }
+    else if (err_bytes_read == 0) {} // write end in child closed
+    else if (err_bytes_read == -1) {} // read it ta salit
     
-    if ((state.pipe_out[0] == -1 && state.pipe_err[0] == -1) || !data_read) {
+    if (!data_read) {
         int status;
         pid_t result = waitpid(state.pid, &status, WNOHANG);
         
         if (result > 0) {
             state.process_complete = true;
             
-            if (WIFEXITED(status)) {
+            if (WIFEXITED(status)) { // child exited
                 state.exit_status = WEXITSTATUS(status);
                 if (state.exit_status != 0)
                     state.syntax_error = true;
@@ -193,9 +189,6 @@ void CGI::handleOutput(State &state)
             state.syntax_error = true;
         }
     }
-
-    if (bytes_read == -1 || err_bytes_read == -1)
-        return;
 }
 
 std::string CGI::getExtensionFromContentType(const std::string &content_type)
@@ -520,16 +513,11 @@ void CGI::convertEnvVarsToCharPtr()
 void CGI::setupArguments()
 {
     // cgi/path + script/location + NULL for python script
-    std::vector<std::string> args(3);
-    args.push_back(cgi_path);
-    args.push_back(script_path);
+    argv = new char*[3];
 
-    argv = new char*[args.size() + 1];
-
-    for (size_t i = 0; i < args.size(); i++)
-        argv[i] = const_cast<char *>(args[i].c_str());
-
-    argv[args.size()] = NULL;
+    argv[0] = const_cast<char *>(cgi_path.c_str());
+    argv[1] = const_cast<char *>(script_path.c_str());
+    argv[2] = NULL;
 }
 
 int CGI::changeToScriptDirectory() // what if the script includes another file (includes "./index.js")

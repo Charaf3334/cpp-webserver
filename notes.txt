@@ -99,15 +99,14 @@ charaf:
         request.queries: ?username=test
         request.uri: /autoindex/upload/Client_10/hair wrap.png
 
-
 l9raya
 testat
-
 
 url enconding, browser kisendi special characters(space, <, >, ", #, %, {, }, |, \, ^, ~, [, ], `) as % encoding, o7naya kandecodiwhom, saad lli ay3tina ras lkhit
 
 movie stream dynamic
 
+test dyal omar lbare7 | print("") | script kicalli get request tani
 
 DEFENSE:
     -why didn't you handle absolute uri in your server? According to the rfc, absolute uri is only allowed when the request is being made to a proxy. And this is not a proxy, this is a werbserver you piece of shit | https://datatracker.ietf.org/doc/html/rfc1945#section-5.1.2

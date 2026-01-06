@@ -2343,13 +2343,13 @@ void Server::handleCGIOutput(int epoll_fd, int pipe_fd)
         if (!cgi_state.state.response_sent_to_client)
         {
             std::string response;
-            
-            if (cgi_state.state.stdout_output.empty())
-                response = buildResponse(buildErrorPage(500), ".html", 500, false, "", false);
+
+            if (!cgi_state.state.stdout_output.empty())
+                response = CGI::buildResponseFromState(this, cgi_state.state, cgi_state.state.request.keep_alive);
             else if (cgi_state.state.syntax_error)
                 response = CGI::buildErrorResponse(this, cgi_state.state);
             else
-                response = CGI::buildResponseFromState(this, cgi_state.state, cgi_state.state.request.keep_alive);
+                response = buildResponse(buildErrorPage(500), ".html", 500, false, "", false);
 
             cgi_state.state.response_sent_to_client = true;
 
