@@ -27,7 +27,8 @@ struct Request
     Webserv::Location location;
     std::string queries;
     std::string params;
-
+    bool has_error_page;
+    bool sent_all_error_page;
 };
 
 #endif

@@ -70,6 +70,7 @@ class Server : public Webserv
         std::vector<int> fileFdstoClose;
         std::map<int, CgiState> cgi_states; // Key:pipe_out[0] (read end)
 
+        bool fileValid(std::string path);
         bool isRequestLineValid(std::string request_line);
         unsigned int getBinaryAddress(std::string address);
         bool allUppercase(std::string method);
@@ -83,10 +84,10 @@ class Server : public Webserv
         sockaddr_in infos(const Webserv::Server server);
         void closeSockets(void);
         static void handlingSigint(int sig);
-        std::string readRequest(int epoll_fd, int client_fd);
+        std::string readRequest(int epoll_fd, int client_fd, bool &been_here);
         std::string _trim(std::string str) const;
         bool isContentLengthValid(std::string value);
-        bool parseRequest(int client_fd, std::string request_string, Request &request);
+        bool parseRequest(int client_fd, std::string request_string, Request &request, bool inside_read_request, bool &been_here);
         std::string getExtension(std::string file_path);
         std::vector<std::string> getheadersLines(const std::string req, bool &flag, int &error_status, std::string &body);
         bool parse_lines(std::vector<std::string> lines, Request &request, int &error_status);

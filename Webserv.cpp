@@ -321,6 +321,15 @@ void Webserv::print_conf(void) {
     }
 }
 
+bool Webserv::htmlPage(std::string path)
+{
+    size_t pos = path.find_last_of("/");
+    std::string file = path.substr(pos + 1);
+    if (!checkFileExtension(file, ".html") && !checkFileExtension(file, ".htm"))
+        return false;
+    return true;
+}
+
 void Webserv::read_file(void)
 {
     this->config_file.clear();
@@ -371,6 +380,8 @@ void Webserv::read_file(void)
                         error_path = tokens[i];
                         if (!checkRoot(error_path))
                             throw std::runtime_error("Error: " + error_path + " not a valid path for error_page.");
+                        if (!htmlPage(error_path))
+                            throw std::runtime_error("Error: " + error_path + " not a valid html page for error_page.");
                         i++;
                         if (tokens[i] != ";")
                             throw std::runtime_error("Error: Expected ';' after error_page.");
@@ -798,9 +809,11 @@ bool Webserv::checkPath(const std::string path) const
 
 bool Webserv::checkRoot(const std::string path) const // if path is like ../whatever, we should return 404 not found
 {
-    if (path.empty())
+    if (path.empty() || path[0] != '/')
         return false;
-    if (path[0] != '/' && !(path.size() > 1 && path[0] == '.' && path[1] == '/'))
+    if (path.find("..") != std::string::npos)
+        return false;
+    if (path.find("//") != std::string::npos)
         return false;
     return true;
 }

@@ -95,6 +95,7 @@ class Webserv
         void sortLocationPaths(Webserv::Server &server);
         static bool locationCmp(const Webserv::Location &l1, const Webserv::Location &l2);
         std::string getAddress(sockaddr_in *addr);
+        bool htmlPage(std::string path);
     public:
         Webserv();
         Webserv(const std::string config_file_path);
