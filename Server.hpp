@@ -65,7 +65,7 @@ class Server : public Webserv
         std::map<int, Webserv::Server*> clientfd_to_server; // KEY=FD this is the map we will use to serve clients per servers
         std::map<int, ClientState> client_states;
         std::map<int, client_read> read_states;
-        std::map<int, Request*> clientfd_to_request;
+        std::map<int, Request> clientfd_to_request;
         bool shutdownFlag;
         std::vector<int> fileFdstoClose;
         std::map<int, CgiState> cgi_states; // Key:pipe_out[0] (read end)

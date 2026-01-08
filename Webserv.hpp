@@ -59,7 +59,6 @@ class Webserv
         std::map<std::string, std::string> error_pages; // global ones
         size_t client_max_body_size; // values are in bytes
         std::stack<std::string> brackets;
-        std::string http_root;
         std::map<int, std::string> status_codes;
         std::map<std::string, std::string> content_type;
         
@@ -94,7 +93,7 @@ class Webserv
         void print_conf(void);
         void sortLocationPaths(Webserv::Server &server);
         static bool locationCmp(const Webserv::Location &l1, const Webserv::Location &l2);
-        std::string getAddress(sockaddr_in *addr);
+        std::string getAddress(sockaddr_in *addr, addrinfo *result, bool should_free);
         bool htmlPage(std::string path);
     public:
         Webserv();

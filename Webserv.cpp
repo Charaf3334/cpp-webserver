@@ -24,7 +24,6 @@ Webserv::Webserv(const Webserv &theOtherObject)
     this->error_pages = theOtherObject.error_pages;
     this->client_max_body_size = theOtherObject.client_max_body_size;
     this->brackets = theOtherObject.brackets;
-    this->http_root = theOtherObject.http_root;
     this->status_codes = theOtherObject.status_codes;
     this->content_type = theOtherObject.content_type;
 }
@@ -38,7 +37,6 @@ Webserv& Webserv::operator=(const Webserv &theOtherObject)
         this->error_pages = theOtherObject.error_pages;
         this->client_max_body_size = theOtherObject.client_max_body_size;
         this->brackets = theOtherObject.brackets;
-        this->http_root = theOtherObject.http_root;
         this->status_codes = theOtherObject.status_codes;
         this->content_type = theOtherObject.content_type;
     }
@@ -352,8 +350,6 @@ void Webserv::read_file(void)
     for (size_t i = 0; i < tokens.size(); i++)
     {
         bool has_body_size = false;
-        bool hasRoot = false;
-        http_root = "";
         while (i < tokens.size() && tokens[i] != "}" && tokens[i] != "server")
         {
             if (tokens[i] == "error_page")
@@ -416,24 +412,8 @@ void Webserv::read_file(void)
                 i++;
                 has_body_size = true;
             }
-            else if (tokens[i] == "root")
-            {
-                if (hasRoot)
-                    throw std::runtime_error("Error: Duplicate root directive inside http block.");
-                hasRoot = true;
-                i++;
-                if (tokens[i] == ";")
-                    throw std::runtime_error("Error: Empty root directive inside http block.");
-                if (!checkPath(tokens[i]))
-                    throw std::runtime_error("Error: Invalid path for root directive inside http block.");
-                http_root = tokens[i];
-                i++;
-                if (tokens[i] != ";")
-                    throw std::runtime_error("Error: Expected ';' after root path inside http block.");
-                i++;
-            }
             else
-                throw std::runtime_error("Error: Unexpected token in http block: " + tokens[i]);
+                throw std::runtime_error("Error: Unexpected token: " + tokens[i]);
         }
         if (!has_body_size)
             client_max_body_size = 1024;
@@ -573,7 +553,7 @@ bool Webserv::checkSemicolon(void) const
 }
 
 
-std::string Webserv::getAddress(sockaddr_in *addr)
+std::string Webserv::getAddress(sockaddr_in *addr, addrinfo *result, bool should_free)
 {
     std::stringstream ip_string;
     unsigned int ip = ntohl(addr->sin_addr.s_addr);
@@ -584,6 +564,8 @@ std::string Webserv::getAddress(sockaddr_in *addr)
     unsigned char second = parts[2];
     unsigned char first = parts[3];
     ip_string << static_cast<int>(first) << "." << static_cast<int>(second) << "." << static_cast<int>(third) << "." << static_cast<int>(forth);
+    if (should_free)
+        freeaddrinfo(result);
     return ip_string.str();
 }
 
@@ -599,8 +581,7 @@ std::string Webserv::convertHostToIp(const std::string host, const std::string m
     if (status != 0 || result == NULL)
         throw std::runtime_error(message);
     sockaddr_in *address = reinterpret_cast<sockaddr_in *>(result->ai_addr);
-    freeaddrinfo(result);
-    return getAddress(address);
+    return getAddress(address, result, true);
 }
 
 bool Webserv::checkHost(const std::string host, bool &isHost) const
@@ -608,24 +589,24 @@ bool Webserv::checkHost(const std::string host, bool &isHost) const
     isHost = true;
     if (host.empty() || host.length() > 253)
         return false;
-    int labelLength = 0;
+    int part_length = 0;
     for (size_t i = 0; i < host.length(); i++)
     {
         char c = host[i];
         if (c == '.')
         {
-            if (labelLength == 0 || labelLength > 63)
+            if (part_length == 0 || part_length > 63)
                 return false;
-            labelLength = 0;
+            part_length = 0;
             continue;
         }
         if (!(std::isalnum(c) || c == '-'))
             return false;
-        if ((labelLength == 0 && c == '-') || (i + 1 < host.length() && host[i + 1] == '.' && c == '-'))
+        if ((part_length == 0 && c == '-') || (i + 1 < host.length() && host[i + 1] == '.' && c == '-'))
             return false;
-        labelLength++;
+        part_length++;
     }
-    if (labelLength == 0 || labelLength > 63)
+    if (part_length == 0 || part_length > 63)
         return false;
     return true;
 }
@@ -974,6 +955,8 @@ void Webserv::parseLocation(size_t &i, Webserv::Server &server, int &depth, bool
                 std::vector<std::string>::iterator found = std::find(location.methods.begin(), location.methods.end(), tokens[i]);
                 if (found == location.methods.end())
                     location.methods.push_back(tokens[i]);
+                else
+                    throw std::runtime_error("Error: " + tokens[i] + " is duplicated.");
                 i++;
             }
         }
@@ -1060,12 +1043,10 @@ void Webserv::parseLocation(size_t &i, Webserv::Server &server, int &depth, bool
         else if (tokens[i] != "root" && tokens[i] != "index" && tokens[i] != "allow_methods" && tokens[i] != "autoindex" && tokens[i] != ";")
             throw std::runtime_error("Error: Invalid directive '" + tokens[i] + "' inside location block.");
     }
-    if (server.root.empty() && !sawRoot && !sawRedirection && http_root.empty())
+    if (server.root.empty() && !sawRoot && !sawRedirection)
         throw std::runtime_error("Error: Missing root.");
     else if (!server.root.empty() && !sawRoot)
         location.root = server.root;
-    else if (server.root.empty() && !sawRoot && !http_root.empty())
-        location.root = http_root;
     if (!sawIndex)
         location.index.push_back("index.html");
     if (!location.methods.size())

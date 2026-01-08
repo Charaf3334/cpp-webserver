@@ -110,3 +110,7 @@ test dyal omar lbare7 | print("") | script kicalli get request tani
 
 DEFENSE:
     -why didn't you handle absolute uri in your server? According to the rfc, absolute uri is only allowed when the request is being made to a proxy. And this is not a proxy, this is a werbserver you piece of shit | https://datatracker.ietf.org/doc/html/rfc1945#section-5.1.2
+
+
+
+fach kaykon file d python khawi, katl3 500 internal server error, w fach kaykon syntax error f php katl3 lia 500 internal server error, f blast dak html d error li fih l7mr

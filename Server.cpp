@@ -57,6 +57,7 @@ unsigned int Server::getBinaryAddress(std::string address)
     return htonl(result);
 }
 
+
 sockaddr_in Server::infos(const Webserv::Server server)
 {
     sockaddr_in address;
@@ -283,7 +284,7 @@ std::string Server::readRequest(int epoll_fd, int client_fd, bool &been_here)
                 return "";
             }
             client.is_post = client.request.method == "POST";
-            clientfd_to_request[client_fd] = &client.request;
+            clientfd_to_request[client_fd] = client.request;
             if (client.is_post)
             {
                 struct stat st;
@@ -1098,27 +1099,18 @@ std::string Server::str_tolower(std::string str)
 
 bool Server::check_allowedfirst(std::string &first)
 {
-    // std::string allowed_first = "!#$%&'*+-.^_`|~:";
     for (size_t i = 0; i < first.size(); i++)
     {
         if (isalnum(first[i]) || first[i] == '-' || first[i] == ':')
             continue;
         else
             return false;
-        // for (int j = 0; j < allowed_first.size(); j++)
-        // {
-        // 	if (first[i] == allowed_first[j])
-        // 		break;
-        // 	if (j == allowed_first.size() - 1)
-        // 		return false;
-        // }
     }
     return true;
 }
 
 bool Server::parse_headers(std::string &line, std::map<std::string, std::string> &map, int &error_status, int option, const std::string boundary)
 {
-    // std::cout << "line: " << line << std::endl;
     if (line.empty())
     {
         error_status = 400;
@@ -1346,7 +1338,7 @@ bool Server::parseRequest(int client_fd, std::string request_string, Request &re
     if (client_addresses.find(client_fd) != client_addresses.end())
     {
         sockaddr_in addr = client_addresses[client_fd];
-        request.remote_addr = getAddress(&addr);
+        request.remote_addr = getAddress(&addr, NULL, false);
         request.remote_port = ntohs(addr.sin_port);
     }
     else
@@ -2216,7 +2208,7 @@ void Server::initialize(void)
                 if (client_fd != -1)
                 {
                     client_addresses[client_fd] = client_addr; // zakaria
-                    std::cout << "New client " << client_fd << " connected from " << getAddress(&client_addr) << ":" << ntohs(client_addr.sin_port) << std::endl;
+                    std::cout << "New client " << client_fd << " connected from " << getAddress(&client_addr, NULL, false) << ":" << ntohs(client_addr.sin_port) << std::endl;
                     setNonBlockingFD(client_fd);
                     this->clientfd_to_server[client_fd] = this->sockfd_to_server[fd];
                     this->client_fds.push_back(client_fd);
@@ -2232,7 +2224,7 @@ void Server::initialize(void)
                 if (client_states.find(fd) == client_states.end())
                 {
                     modifyEpollEvents(epoll_fd, fd, EPOLLIN);
-                    bool keep_alive = clientfd_to_request[fd]->keep_alive;
+                    bool keep_alive = clientfd_to_request[fd].keep_alive;
                     if (!keep_alive && sending_done)
                     {
                         closeClient(epoll_fd, fd, true);
@@ -2240,7 +2232,8 @@ void Server::initialize(void)
                     }
                 }
             }
-            else if ((cgi_states.find(fd) != cgi_states.end()) && (events[i].events & (EPOLLIN | EPOLLHUP))) {
+            else if ((cgi_states.find(fd) != cgi_states.end()) && (events[i].events & (EPOLLIN | EPOLLHUP))) 
+            {
                 if (cgi_states.find(fd) != cgi_states.end())
                 {
                     handleCGIOutput(epoll_fd, fd);
@@ -2261,18 +2254,13 @@ void Server::initialize(void)
                     is_post = client_read_state.is_post;
                     read_states.erase(fd);
                 }
-                if (request_string.empty())
-                {
-                    closeClient(epoll_fd, fd, true);
-                    continue;
-                }
                 Request request;
                 if (!is_post && !parseRequest(fd, request_string, request, false, been_here) && !request.has_error_page)
                 {
                     closeClient(epoll_fd, fd, true);
                     continue;
                 }
-                clientfd_to_request[fd] = &request;
+                clientfd_to_request[fd] = request;
                 bool sending_done = false;
                 if (!is_post)
                     sending_done = serveClient(fd, request, epoll_fd);
