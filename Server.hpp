@@ -53,6 +53,7 @@ class Server : public Webserv
             int loop_counter;
             bool packet_ended;
             bool first_call;
+            bool client_disconnected;
         };
         struct CgiState
         {

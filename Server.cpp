@@ -200,6 +200,7 @@ std::string Server::readRequest(int epoll_fd, int client_fd, bool &been_here)
         client.packet_ended = true;
         client.end_boundary_found = false;
         client.first_call = true;
+        client.client_disconnected = false;
     }
     while (1)
     {
@@ -220,6 +221,7 @@ std::string Server::readRequest(int epoll_fd, int client_fd, bool &been_here)
         {
             client.is_request_full = true;
             std::cout << "Client " << client_fd << " disconnected" << std::endl;
+            client.client_disconnected = true;
             return client.headers;
         }
         client.has_start_time = false;
@@ -318,6 +320,54 @@ std::string Server::readRequest(int epoll_fd, int client_fd, bool &been_here)
                     else
                     {
                         std::string response = buildResponse(buildErrorPage(405), ".html", 405, false, "", client.request.keep_alive);
+                        sendResponse(client_fd, response, client.request.keep_alive);
+                        client.is_request_full = true;
+                        client.keep_alive = client.request.keep_alive;
+                        return "";
+                    }
+                }
+                if (client.request.location.isRedirection)
+                {
+                    if (!client.request.location.redirectionIsText)
+                    {
+                        if (client.request.location.redirect_relative)
+                        {
+                            if (!isUriExists(client.request.location.redirection.second, server, true)) // hadi drnaha 3la hsab return location wach exists
+                            {
+                                if (error_pages.count("404") && fileValid(error_pages["404"]))
+                                {
+                                    sendFileResponse(client_fd, error_pages["404"], getExtension(error_pages["404"]), 404, client.request.keep_alive);
+                                    client.is_request_full = true;
+                                    client.keep_alive = client.request.keep_alive;
+                                    return "";
+                                }
+                                else
+                                {
+                                    std::string response = buildResponse(buildErrorPage(404), ".html", 404, false, "", client.request.keep_alive);
+                                    sendResponse(client_fd, response, client.request.keep_alive);
+                                    client.is_request_full = true;
+                                    client.keep_alive = client.request.keep_alive;
+                                    return "";
+                                }
+                            }
+                            std::string response = buildResponse("", "", client.request.location.redirection.first, true, client.request.location.redirection.second, client.request.keep_alive);
+                            sendResponse(client_fd, response, client.request.keep_alive);
+                            client.is_request_full = true;
+                            client.keep_alive = client.request.keep_alive;
+                            return "";
+                        }
+                        else if (client.request.location.redirect_absolute)
+                        {
+                            std::string response = buildResponse("", "", client.request.location.redirection.first, true, client.request.location.redirection.second, client.request.keep_alive);
+                            sendResponse(client_fd, response, client.request.keep_alive);
+                            client.is_request_full = true;
+                            client.keep_alive = client.request.keep_alive;
+                            return "";
+                        }
+                    }
+                    else
+                    {
+                        std::string response = buildResponse(client.request.location.redirection.second, "", client.request.location.redirection.first, false, "", client.request.keep_alive);
                         sendResponse(client_fd, response, client.request.keep_alive);
                         client.is_request_full = true;
                         client.keep_alive = client.request.keep_alive;
@@ -2255,6 +2305,8 @@ void Server::initialize(void)
                         continue;
                     request_string = client_read_state.headers;
                     is_post = client_read_state.is_post;
+                    if (client_read_state.client_disconnected)
+                        closeClient(epoll_fd, fd, true);
                     read_states.erase(fd);
                 }
                 Request request;
