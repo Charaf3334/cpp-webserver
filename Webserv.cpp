@@ -443,47 +443,9 @@ void Webserv::read_file(void)
         throw std::runtime_error("Error: Multiple servers listen to same ports.");
     if (checkDuplicatePaths())
         throw std::runtime_error("Error: Server has the same location path multiple times.");
-    // mergePaths();
-    
     // print_conf();
 }
 
-void Webserv::mergePaths(void)
-{
-    for (size_t i = 0; i < servers.size(); i++)
-    {
-        for (size_t j = 0; j < servers[i].locations.size(); j++)
-        {
-            std::string rooot = servers[i].locations[j].root;
-            std::string path = servers[i].locations[j].path;
-            if (path != "/")
-            {
-                size_t pos = path.find('/', 1);
-                if (pos == std::string::npos)
-                    path += "/";
-            }
-            for (size_t k = 0; k < servers[i].locations[j].index.size(); k++)
-            {
-                std::string index = rooot + path + servers[i].locations[j].index[k];
-                servers[i].locations[j].index[k] = index;
-            }
-            std::map<std::string, std::string>::iterator it = error_pages.begin();
-            for (; it != error_pages.end(); it++)
-            {
-                std::string error_page_path = it->second;
-                if (error_page_path[0] == '.' && error_page_path[1] == '/')
-                    error_page_path = error_page_path.substr(2);
-                else if (error_page_path[0] == '/')
-                    error_page_path = error_page_path.substr(1);
-                std::string full_path = rooot + path + error_page_path;
-                servers[i].locations[j].error_pages[atoll(it->first.c_str())] = full_path;
-            }
-            if (servers[i].locations[j].upload_dir[0] == '.')
-                servers[i].locations[j].upload_dir = servers[i].locations[j].upload_dir.substr(1);
-            servers[i].locations[j].upload_dir = rooot + servers[i].locations[j].path + servers[i].locations[j].upload_dir;
-        }
-    }
-}
 
 bool Webserv::checkMaxBodySize(const std::string value)
 {
@@ -764,7 +726,7 @@ void Webserv::locationDefaultInit(Location &location)
     location.root = "";
     location.isRedirection = false;
     location.redirectionIsText = false;
-    location.upload_dir = "/uploads"; // default path
+    location.upload_dir = "/uploads";
     location.hasCgi = false;
     location.redirect_absolute = false;
     location.redirect_relative = false;
@@ -788,7 +750,7 @@ bool Webserv::checkPath(const std::string path) const
     return true;
 }
 
-bool Webserv::checkRoot(const std::string path) const // if path is like ../whatever, we should return 404 not found
+bool Webserv::checkRoot(const std::string path) const
 {
     if (path.empty() || path[0] != '/')
         return false;
@@ -836,7 +798,7 @@ Webserv::Server Webserv::parseServer(size_t &i)
             if (!sawListen)
                 throw std::runtime_error("Error: Expected listen directive at top of server block.");
         }
-        if (tokens[i] == "root") // zakaria root in server
+        if (tokens[i] == "root")
         {
             if (depth != 1)
                 throw std::runtime_error("Error: root not in appropriate place.");
@@ -869,7 +831,7 @@ Webserv::Server Webserv::parseServer(size_t &i)
             break;
         }
     }
-    sortLocationPaths(server); // kansortiw locations bach manseb9och b / licatvalida dima
+    sortLocationPaths(server);
     return server;
 }
 
@@ -920,7 +882,7 @@ void Webserv::parseLocation(size_t &i, Webserv::Server &server, int &depth, bool
                 throw std::runtime_error("Error: Expected a path after root directive.");
             if (tokens[i + 1] != ";")
                 throw std::runtime_error("Error: Expected ';' after root.");
-            if (!checkRoot(tokens[i])) // khsni mzl nchecki wach dak path 3ndi, hada ghy check syntax
+            if (!checkRoot(tokens[i]))
                 throw std::runtime_error("Error: Invalid path for root directive.");
             location.root = tokens[i];
         }

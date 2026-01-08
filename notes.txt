@@ -83,11 +83,6 @@ to do:
 movie stream dynamic
 
 charaf:
-    tibarike: "GET / HTTP/1.0\r\nzakaria:  hh \r\n\r\n" spaces after dopwan 
-
-
-    zakaria - cgi
-    i should build a default working cgi files in cgi files final
     exit status error page
     error page
     ✅query params
@@ -102,15 +97,7 @@ charaf:
 l9raya
 testat
 
-url enconding, browser kisendi special characters(space, <, >, ", #, %, {, }, |, \, ^, ~, [, ], `) as % encoding, o7naya kandecodiwhom, saad lli ay3tina ras lkhit
-
 movie stream dynamic
-
-test dyal omar lbare7 | print("") | script kicalli get request tani
 
 DEFENSE:
     -why didn't you handle absolute uri in your server? According to the rfc, absolute uri is only allowed when the request is being made to a proxy. And this is not a proxy, this is a werbserver you piece of shit | https://datatracker.ietf.org/doc/html/rfc1945#section-5.1.2
-
-
-
-fach kaykon file d python khawi, katl3 500 internal server error, w fach kaykon syntax error f php katl3 lia 500 internal server error, f blast dak html d error li fih l7mr

@@ -43,7 +43,6 @@ class Webserv
             std::pair<int, std::string> redirection;
             std::string upload_dir;
             bool hasCgi;
-            std::map<size_t, std::string> error_pages; // each location error pages
         };
     protected:
         struct Server
@@ -56,15 +55,14 @@ class Webserv
         std::ifstream config_file;
         std::vector<std::string> tokens;
         std::vector<Webserv::Server> servers;
-        std::map<std::string, std::string> error_pages; // global ones
-        size_t client_max_body_size; // values are in bytes
+        std::map<std::string, std::string> error_pages;
+        size_t client_max_body_size;
         std::stack<std::string> brackets;
         std::map<int, std::string> status_codes;
         std::map<std::string, std::string> content_type;
         
         Server parseServer(size_t &i);
         void parseLocation(size_t &i, Webserv::Server &server, int &depth, bool &sawLocation);
-        void mergePaths(void);
         std::string* split(const std::string line);
         size_t countParts(const std::string line) const;
         bool isFileEmpty(void);

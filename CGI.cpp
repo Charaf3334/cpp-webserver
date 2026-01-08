@@ -3,7 +3,7 @@
 
 std::map<std::string, std::string> CGI::ext_map;
 
-CGI::State::State() : pid(-1), client_fd(-1), headers_complete(false), process_complete(false), response_sent_to_client(false), start_time(0), syntax_error(false), exit_status(-1)
+CGI::State::State() : pid(-1), client_fd(-1), headers_complete(false), process_complete(false), response_sent_to_client(false), syntax_error(false), exit_status(-1)
 {
     pipe_out[0] = pipe_out[1] = -1;
     pipe_err[0] = pipe_err[1] = -1;
@@ -37,8 +37,6 @@ CGI::~CGI()
 {
     if (argv)
     {
-        delete[] argv[0];
-        delete[] argv[1];
         delete[] argv;
         argv = NULL;
     }
@@ -58,13 +56,12 @@ bool CGI::start(State &state)
     state.headers_complete = false;
     state.process_complete = false;
     state.response_sent_to_client = false;
-    state.start_time = time(NULL);
     state.cgi_path = cgi_path;
     
     if (cgi_path.empty())
         return false;
 
-    if (pipe(state.pipe_out) == -1 || pipe(state.pipe_err) == -1 || (request.method == "POST" && pipe(state.pipe_in) == -1))
+    if (pipe(state.pipe_out) == -1 || pipe(state.pipe_err) == -1 || ((request.method == "POST" || request.method == "DELETE") && pipe(state.pipe_in) == -1))
     {
         perror("pipe");
         cleanupPipes(state.pipe_in, state.pipe_out, state.pipe_err);
@@ -81,14 +78,13 @@ bool CGI::start(State &state)
     
     if (state.pid == 0)
         childProcess(state.pipe_in, state.pipe_out, state.pipe_err);
-    else // Parent
-    {
+    else {
         close(state.pipe_out[1]);
         close(state.pipe_err[1]);
         state.pipe_out[1] = -1;
         state.pipe_err[1] = -1;
         
-        if (request.method == "POST") {
+        if ((request.method == "POST" || request.method == "DELETE")) {
             close(state.pipe_in[0]);
             state.pipe_in[0] = -1;
             if (!request.body.empty()) {
@@ -100,24 +96,24 @@ bool CGI::start(State &state)
             state.pipe_in[1] = -1;
         }
     }
-    std::cout << "Started CGI process " << state.pid << " for client " << state.client_fd << std::endl;
+    // std::cout << "Started CGI process " << state.pid << " for client " << state.client_fd << std::endl;
     return true;
 }
 void CGI::childProcess(int pipe_in[2], int pipe_out[2], int pipe_err[2])
 {
     close(pipe_out[0]);
     close(pipe_err[0]);
-    if (request.method == "POST")
+    if (request.method == "POST" || request.method == "DELETE")
         close(pipe_in[1]);
     
     dup2(pipe_out[1], STDOUT_FILENO);
     dup2(pipe_err[1], STDERR_FILENO);
-    if (request.method == "POST")
+    if (request.method == "POST" || request.method == "DELETE")
         dup2(pipe_in[0], STDIN_FILENO);
     
     close(pipe_out[1]);
     close(pipe_err[1]);
-    if (request.method == "POST")
+    if (request.method == "POST" || request.method == "DELETE")
         close(pipe_in[0]);
     
     setupEnvironment();
@@ -128,8 +124,6 @@ void CGI::childProcess(int pipe_in[2], int pipe_out[2], int pipe_err[2])
         execve(cgi_path.c_str(), argv, env_cgi);
     
     perror("execve");
-    delete[] argv[0];
-    delete[] argv[1];
     delete[] argv;
     delete[] env_cgi;
     exit(1);
@@ -144,7 +138,6 @@ void CGI::handleOutput(State &state)
     char buffer[65536];
     ssize_t bytes_read = read(state.pipe_out[0], buffer, sizeof(buffer));
     if (bytes_read > 0) {
-        state.start_time = time(NULL);
         state.stdout_output.append(buffer, bytes_read);
         data_read = true;
         
@@ -214,7 +207,7 @@ std::string CGI::buildResponseFromState(Server *server, State &state, bool keep_
     for (size_t i = 0; i < state.cgi_headers.size(); i++)
     {
         if (state.cgi_headers[i].first == "status") {
-            std::istringstream ss(state.cgi_headers[i].second);
+            std::stringstream ss(state.cgi_headers[i].second);
             ss >> status_code;
             if (status_code < 100 || status_code > 599)
                 status_code = 200;
@@ -231,7 +224,7 @@ std::string CGI::buildResponseFromState(Server *server, State &state, bool keep_
         }
     }
 
-    if (status_code >= 500)
+    if (status_code >= 400)
         return server->buildResponse(server->buildErrorPage(status_code), content_type, status_code, false, "", keep_alive, state.cgi_headers);
     
     return server->buildResponse(response, content_type, status_code, false, "", keep_alive, state.cgi_headers);
@@ -239,9 +232,9 @@ std::string CGI::buildResponseFromState(Server *server, State &state, bool keep_
 
 std::string CGI::buildErrorResponse(Server *server, State &state)
 {
-    std::ostringstream oss;
+    std::stringstream ss;
 
-    oss << "<!DOCTYPE html>"
+    ss << "<!DOCTYPE html>"
         << "<html lang='en'>"
         << "<head>"
         << "<meta charset='UTF-8' />"
@@ -262,7 +255,7 @@ std::string CGI::buildErrorResponse(Server *server, State &state)
         << "</body>"
         << "</html>";
 
-    std::string response = oss.str();
+    std::string response = ss.str();
     
     return server->buildResponse(response, ".html", 500, false, "", false);
 }
@@ -291,7 +284,7 @@ std::string CGI::parseCGIOutput(State &state, bool &redirect, std::string &locat
 std::vector<std::pair<std::string, std::string> > CGI::parseCGIHeaders(std::string &headers)
 {
     std::vector<std::pair<std::string, std::string> > cgi_headers;
-    std::istringstream header_stream(headers);
+    std::stringstream header_stream(headers);
     std::string line;
     
     while (std::getline(header_stream, line))
@@ -322,7 +315,7 @@ void CGI::cleanup(State &state, bool kill_process)
     {
         std::cerr << "cgi killed\n";
         kill(state.pid, SIGKILL);
-        waitpid(state.pid, NULL, 0); // block the main thread until the process is done
+        waitpid(state.pid, NULL, 0);
     }
     
     cleanupPipes(state.pipe_in, state.pipe_out, state.pipe_err);
@@ -365,7 +358,7 @@ void CGI::setupEnvironment()
     env_vars.push_back("QUERY_STRING=" + request.queries);
     env_vars.push_back("PATH_INFO=");
     env_vars.push_back("PATH_TRANSLATED=");
-    env_vars.push_back("REDIRECT_STATUS=200");
+    env_vars.push_back("REDIRECT_STATUS=200"); // php
     env_vars.push_back("GATEWAY_INTERFACE=CGI/1.1");
     env_vars.push_back("SERVER_PROTOCOL=HTTP/1.0");
     env_vars.push_back("SERVER_SOFTWARE=Webserv/1.0");
@@ -375,11 +368,6 @@ void CGI::setupEnvironment()
     setupContentEnvironment();
     setupHeadersEnvironment();
     setupPathEnvironment();
-
-    // print env vars in child
-    // std::cerr << "ENV VARS:\n";
-    // for (size_t i = 0; i < env_vars.size(); i++)
-    //     std::cerr << env_vars[i] << std::endl;
 }
 
 void CGI::setupAuthEnvironment()
@@ -403,20 +391,13 @@ void CGI::setupAuthEnvironment()
         }
     }
     else
-    {
         env_vars.push_back("AUTH_TYPE=");
-    }
 }
 
 void CGI::setupServerEnvironment()
 {
     std::string server_name = "localhost";
     std::string server_port = "80";
-
-    // print request headers
-    // for (std::map<std::string, std::string>::iterator it = request.headers.begin(); it != request.headers.end(); it++) {
-    //     std::cerr << "\nfirst: |" << it->first << "| second: |" <<  it->second << "|" ;
-    // }
         
     std::map<std::string, std::string>::iterator it = request.headers.find("host");
     if (it != request.headers.end())
@@ -430,9 +411,7 @@ void CGI::setupServerEnvironment()
             server_port = host.substr(colon + 1);
         }
         else
-        {
             server_name = host;
-        }
     }
 
     env_vars.push_back("SERVER_NAME=" + server_name);
@@ -448,33 +427,25 @@ void CGI::setupServerEnvironment()
     ss << remote_port;
     env_vars.push_back("REMOTE_ADDR=" + remote_addr);
     env_vars.push_back("REMOTE_PORT=" + ss.str());
-//     std::cerr << "remote addr: " << remote_addr << std::endl;
-//     std::cerr << "remote port: " << ss.str() << std::endl;
 }
 
 void CGI::setupContentEnvironment()
 {
-    if (request.method == "POST")
+    if (request.method == "POST" || request.method == "DELETE")
     {
         if (request.headers.count("content-length"))
-        {
             env_vars.push_back("CONTENT_LENGTH=" + request.headers.find("content-length")->second);
-        }
         else if (!request.body.empty())
         {
-            std::ostringstream oss;
-            oss << request.body.size();
-            env_vars.push_back("CONTENT_LENGTH=" + oss.str());
+            std::stringstream ss;
+            ss << request.body.size();
+            env_vars.push_back("CONTENT_LENGTH=" + ss.str());
         }
         else
-        {
             env_vars.push_back("CONTENT_LENGTH=0");
-        }
 
         if (request.headers.count("content-type"))
-        {
             env_vars.push_back("CONTENT_TYPE=" + request.headers.find("content-type")->second);
-        }
     }
     else
     {
@@ -485,10 +456,9 @@ void CGI::setupContentEnvironment()
 
 void CGI::setupHeadersEnvironment()
 {
-    for (std::map<std::string, std::string>::const_iterator it = request.headers.begin();
-         it != request.headers.end(); ++it)
+    for (std::map<std::string, std::string>::const_iterator it = request.headers.begin(); it != request.headers.end(); it++)
     {
-        if (it->first == "authorization" || it->first == "content-length")
+        if (it->first == "authorization" || it->first == "content-length" || it->first == "content-type" || it->first == "connection")
             continue;
         std::string key = "HTTP_" + it->first;
         std::transform(key.begin(), key.end(), key.begin(), ::toupper);
@@ -499,9 +469,7 @@ void CGI::setupHeadersEnvironment()
 
 void CGI::setupPathEnvironment()
 {
-    env_vars.push_back("SCRIPT_NAME=" + request.uri);
-    env_vars.push_back("PATH_INFO="); // if path info is empty same should be for path translated
-    // if path info is empty, path translated must be unset
+    env_vars.push_back("PATH_INFO=");
     env_vars.push_back("PATH_TRANSLATED=");
 }
 
@@ -515,7 +483,6 @@ void CGI::convertEnvVarsToCharPtr()
 
 void CGI::setupArguments()
 {
-    // cgi/path + script/location + NULL for python script
     argv = new char*[3];
 
     argv[0] = const_cast<char *>(cgi_path.c_str());
@@ -523,7 +490,7 @@ void CGI::setupArguments()
     argv[2] = NULL;
 }
 
-int CGI::changeToScriptDirectory() // what if the script includes another file (includes "./index.js")
+int CGI::changeToScriptDirectory()
 {
     size_t last_slash = script_path.find_last_of("/");
     if (last_slash != std::string::npos)

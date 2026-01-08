@@ -13,9 +13,9 @@ class CGI {
         {
             pid_t pid;
             int client_fd;
-            int pipe_out[2];    // CGI stdout -> server
-            int pipe_err[2];    // CGI stderr -> server
-            int pipe_in[2];     // server -> CGI stdin (POST)
+            int pipe_out[2];
+            int pipe_err[2];
+            int pipe_in[2];
             std::string stdout_output; 
             std::string stderr_output;
             std::string script_path;
@@ -25,7 +25,6 @@ class CGI {
             bool headers_complete;
             bool process_complete;
             bool response_sent_to_client;
-            time_t start_time;
             std::string cgi_path;
             bool syntax_error;
             int exit_status;
