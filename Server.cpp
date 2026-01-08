@@ -137,6 +137,7 @@ std::string Server::buildResponse(std::string body, std::string extension, int s
     response += "Connection: " + std::string(keep_alive ? "keep-alive" : "close") + CRLF;
     response += CRLF;
     response += body;
+
     return response;
 }
 
@@ -1346,6 +1347,8 @@ bool Server::parseRequest(int client_fd, std::string request_string, Request &re
         request.remote_addr = "127.0.0.1";
         request.remote_port = 0;
     }
+    if (request.method == "POST")
+        std::cout << YELLOW << "[ " << request.method << " ] " << RESET << request.uri << " " << request.remote_addr << ":" << request.remote_port << std::endl;
     return true;
 }
 
@@ -2260,6 +2263,12 @@ void Server::initialize(void)
                     closeClient(epoll_fd, fd, true);
                     continue;
                 }
+                if (!is_post) {
+                    if (request.method == "DELETE")
+                        std::cout << RED << "[ " << request.method << " ] " << RESET << request.uri << " " << request.remote_addr << ":" << request.remote_port << std::endl;
+                    else
+                        std::cout << GREEN << "[ " << request.method << " ] " << RESET << request.uri << " " << request.remote_addr << ":" << request.remote_port << std::endl;
+                }
                 clientfd_to_request[fd] = request;
                 bool sending_done = false;
                 if (!is_post)
@@ -2305,7 +2314,7 @@ bool Server::setupCGI(Request &request, std::string &script_path, std::string &e
 
     if (cgi_state.state.pipe_out[0] != -1)
     {
-        if (!setNonBlockingFD(cgi_state.state.pipe_out[0]) || !setNonBlockingFD(cgi_state.state.pipe_err[0])){
+        if (!setNonBlockingFD(cgi_state.state.pipe_out[0]) || !setNonBlockingFD(cgi_state.state.pipe_err[0])) {
             cleanupCGI(epoll_fd, cgi_state.state.pipe_out[0], true);
             return false;
         }

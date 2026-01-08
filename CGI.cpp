@@ -230,6 +230,9 @@ std::string CGI::buildResponseFromState(Server *server, State &state, bool keep_
             content_type = getExtensionFromContentType(type);
         }
     }
+
+    if (status_code >= 500)
+        return server->buildResponse(server->buildErrorPage(status_code), content_type, status_code, false, "", keep_alive, state.cgi_headers);
     
     return server->buildResponse(response, content_type, status_code, false, "", keep_alive, state.cgi_headers);
 }
