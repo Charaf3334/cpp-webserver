@@ -55,7 +55,6 @@ class Webserv
         std::ifstream config_file;
         std::vector<std::string> tokens;
         std::vector<Webserv::Server> servers;
-        std::map<std::string, std::string> error_pages;
         size_t client_max_body_size;
         std::stack<std::string> brackets;
         std::map<int, std::string> status_codes;
@@ -99,7 +98,8 @@ class Webserv
         Webserv(const Webserv &theOtherObject);
         Webserv& operator=(const Webserv &theOtherObject);
         ~Webserv();
-
+        
+        std::map<std::string, std::string> error_pages;
         void read_file(void);
 };
 

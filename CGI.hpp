@@ -65,7 +65,7 @@ class CGI {
         void cleanup(State &state, bool kill_process = false);
         static std::string parseCGIOutput(State &state, bool &redirect, std::string &location);
         static std::vector<std::pair<std::string, std::string> > parseCGIHeaders(std::string &headers);      
-        static std::string buildResponseFromState(Server *server, State &state, bool keep_alive);
+        static std::string buildResponseFromState(Server *server, State &state, bool keep_alive, bool &error_status_in_cgi, int &error_status_code_cgi);
         static std::string buildErrorResponse(Server *server, State &state);
         static std::string trim(std::string &s);
         static std::string getExtensionFromContentType(const std::string &content_type);

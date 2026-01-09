@@ -75,7 +75,6 @@ private:
     std::vector<int> fileFdstoClose;
     std::map<int, CgiState> cgi_states;
 
-    bool fileValid(std::string path);
     bool isRequestLineValid(std::string request_line);
     unsigned int getBinaryAddress(std::string address);
     bool allUppercase(std::string method);
@@ -93,7 +92,6 @@ private:
     std::string _trim(std::string str) const;
     bool isContentLengthValid(std::string value);
     bool parseRequest(int client_fd, std::string request_string, Request &request, bool inside_read_request, bool &been_here);
-    std::string getExtension(std::string file_path);
     std::vector<std::string> getheadersLines(const std::string req, bool &flag, int &error_status, std::string &body);
     bool parse_lines(std::vector<std::string> lines, Request &request, int &error_status);
     bool parse_headers(std::string &line, std::map<std::string, std::string> &map, int &error_status, int option, const std::string boundary);
@@ -101,7 +99,6 @@ private:
     bool check_allowedfirst(std::string &first);
     bool parse_methode(std::string *words, int &error_status, Request &request);
     bool parse_path(std::string &path);
-    std::string tostring(size_t num) const;
     bool serveClient(int client_fd, Request request, int epoll_fd);
     bool isUriExists(std::string uri, Webserv::Server server, bool flag) const;
     Webserv::Location getLocation(std::string uri, Webserv::Server server);
@@ -112,7 +109,6 @@ private:
     bool sendResponse(int client_fd, const std::string response, bool keep_alive);
     bool continueSending(int client_fd);
     void modifyEpollEvents(int epoll_fd, int client_fd, unsigned int events);
-    bool sendFileResponse(int client_fd, const std::string file_path, const std::string extension, int status, bool keep_alive);
     bool setupCGI(Request &request, std::string &script_path, std::string &extension, int client_fd, int epoll_fd);
     void handleCGIOutput(int epoll_fd, int pipe_fd);
     void cleanupCGI(int epoll_fd, int pipe_fd, bool kill_process = false);
@@ -123,6 +119,10 @@ private:
 public:
     std::string buildResponse(std::string body, std::string extension, int status, bool inRedirection, std::string newPath, bool keep_alive, const std::vector<std::pair<std::string, std::string> > &extra_headers = std::vector<std::pair<std::string, std::string> >());
     std::string buildErrorPage(int code);
+    std::string tostring(size_t num) const;
+    bool fileValid(std::string path);
+    bool sendFileResponse(int client_fd, const std::string file_path, const std::string extension, int status, bool keep_alive);
+    std::string getExtension(std::string file_path);
 
     Server(Webserv webserv);
     Server(const Server &theOtherObject);

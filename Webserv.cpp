@@ -896,7 +896,7 @@ void Webserv::parseLocation(size_t &i, Webserv::Server &server, int &depth, bool
                 throw std::runtime_error("Error: Expected files at index directive.");
             while (i < tokens.size() && tokens[i] != ";")
             {
-                if (tokens[i] == "root" || tokens[i] == "allow_methods" || tokens[i] == "index" || tokens[i] == "autoindex" || tokens[i] == "}")
+                if (tokens[i] == "root" || tokens[i] == "allow_methods" || tokens[i] == "index" || tokens[i] == "autoindex" || tokens[i] == "return" || tokens[i] == "cgi" || tokens[i] == "upload_dir" || tokens[i] == "}")
                     throw std::runtime_error("Error: Expected ';' after index.");
                 location.index.push_back(tokens[i]);
                 i++;

@@ -2349,10 +2349,8 @@ bool Server::setupCGI(Request &request, std::string &script_path, std::string &e
     CgiState cgi_state;
     cgi_state.state.client_fd = client_fd;
     cgi_state.start_time = time(NULL);
-
     if (!cgi.start(cgi_state.state))
         return false;
-
     if (cgi_state.state.pipe_out[0] != -1)
     {
         if (!setNonBlockingFD(cgi_state.state.pipe_out[0]) || !setNonBlockingFD(cgi_state.state.pipe_err[0]))
@@ -2360,7 +2358,6 @@ bool Server::setupCGI(Request &request, std::string &script_path, std::string &e
             cleanupCGI(epoll_fd, cgi_state.state.pipe_out[0], true);
             return false;
         }
-
         cgi_states[cgi_state.state.pipe_out[0]] = cgi_state;
         return true;
     }
@@ -2371,27 +2368,35 @@ void Server::handleCGIOutput(int epoll_fd, int pipe_fd)
 {
     if (cgi_states.find(pipe_fd) == cgi_states.end())
         return;
-
+    
     CgiState &cgi_state = cgi_states[pipe_fd];
     CGI cgi(this, cgi_state.state.request, cgi_state.state.script_path, cgi_state.state.extension);
-
     cgi.handleOutput(cgi_state.state);
-
     if (cgi_state.state.process_complete)
     {
         if (!cgi_state.state.response_sent_to_client)
         {
             std::string response;
-
+            bool error_status_in_cgi = false; // in case header fcgi status kan error
+            int error_status_code_cgi = 0;
             if (!cgi_state.state.stdout_output.empty())
-                response = CGI::buildResponseFromState(this, cgi_state.state, cgi_state.state.request.keep_alive);
+                response = CGI::buildResponseFromState(this, cgi_state.state, cgi_state.state.request.keep_alive, error_status_in_cgi, error_status_code_cgi);
             else if (cgi_state.state.syntax_error)
                 response = CGI::buildErrorResponse(this, cgi_state.state);
             else
-                response = buildResponse(buildErrorPage(500), ".html", 500, false, "", false);
-
+            {
+                if (error_pages.count("500") && fileValid(error_pages["500"]))
+                    sendFileResponse(cgi_state.state.client_fd, error_pages["500"], getExtension(error_pages["500"]), 500, cgi_state.state.request.keep_alive);
+                else
+                    response = buildResponse(buildErrorPage(500), ".html", 500, false, "", false);
+            }
+            // in case kan error, check first if error page msetiya flconfig else serve default ones
+            if (error_status_in_cgi && error_pages.count(tostring(error_status_code_cgi)) && fileValid(error_pages[tostring(error_status_code_cgi)])) 
+            {
+                response = "";
+                sendFileResponse(cgi_state.state.client_fd, error_pages[tostring(error_status_code_cgi)], getExtension(error_pages[tostring(error_status_code_cgi)]), error_status_code_cgi, cgi_state.state.request.keep_alive);
+            }
             cgi_state.state.response_sent_to_client = true;
-
             bool fully_sent = sendResponse(cgi_state.state.client_fd, response, cgi_state.state.request.keep_alive);
             if (write_states.find(cgi_state.state.client_fd) != write_states.end())
                 modifyEpollEvents(epoll_fd, cgi_state.state.client_fd, EPOLLIN | EPOLLOUT);
@@ -2408,15 +2413,12 @@ void Server::cleanupCGI(int epoll_fd, int pipe_fd, bool kill_process)
         return;
 
     CgiState &cgi_state = cgi_states[pipe_fd];
-
     CGI cgi(this, cgi_state.state.request, cgi_state.state.script_path, cgi_state.state.extension);
-
     if (cgi_state.added_to_epoll)
     {
         epoll_ctl(epoll_fd, EPOLL_CTL_DEL, pipe_fd, NULL);
         cgi_state.added_to_epoll = false;
     }
-
     cgi.cleanup(cgi_state.state, kill_process);
     cgi_states.erase(pipe_fd);
 }
@@ -2439,7 +2441,6 @@ void Server::checkTimeoutCGI(int epoll_fd)
             timed_out.push_back(it->first);
         }
     }
-
     for (size_t i = 0; i < timed_out.size(); i++)
         cleanupCGI(epoll_fd, timed_out[i], true);
 }

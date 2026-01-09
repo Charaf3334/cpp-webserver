@@ -192,7 +192,7 @@ std::string CGI::getExtensionFromContentType(const std::string &content_type)
     return ".txt";
 }
 
-std::string CGI::buildResponseFromState(Server *server, State &state, bool keep_alive)
+std::string CGI::buildResponseFromState(Server *server, State &state, bool keep_alive, bool &error_status_in_cgi, int &error_status_code_cgi)
 {
     bool redirect = false;
     std::string location;
@@ -224,8 +224,11 @@ std::string CGI::buildResponseFromState(Server *server, State &state, bool keep_
         }
     }
 
-    if (status_code >= 400)
+    if (status_code >= 400) {
+        error_status_code_cgi = status_code;
+        error_status_in_cgi = true;
         return server->buildResponse(server->buildErrorPage(status_code), content_type, status_code, false, "", keep_alive, state.cgi_headers);
+    }
     
     return server->buildResponse(response, content_type, status_code, false, "", keep_alive, state.cgi_headers);
 }
