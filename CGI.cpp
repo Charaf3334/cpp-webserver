@@ -316,7 +316,7 @@ void CGI::cleanup(State &state, bool kill_process)
 {
     if (kill_process && state.pid > 0)
     {
-        std::cerr << "cgi killed\n";
+        // std::cerr << "cgi killed\n";
         kill(state.pid, SIGKILL);
         waitpid(state.pid, NULL, 0);
     }

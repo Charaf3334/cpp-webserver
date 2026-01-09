@@ -2017,6 +2017,7 @@ void Server::checkTimeoutClients(int epoll_fd)
 
     for (; it != read_states.end(); it++)
     {
+        bool not_done = true;
         int client_fd = it->first;
         client_read &client_ref = it->second;
         if (client_ref.has_start_time)
@@ -2025,7 +2026,7 @@ void Server::checkTimeoutClients(int epoll_fd)
             if (passed_time > 3)
             {
                 if (error_pages.count("400") && fileValid(error_pages["400"]))
-                    sendFileResponse(client_fd, error_pages["400"], getExtension(error_pages["400"]), 400, false);
+                    not_done = sendFileResponse(client_fd, error_pages["400"], getExtension(error_pages["400"]), 400, false);
                 else
                 {
                     std::string response = buildResponse(buildErrorPage(400), ".html", 400, false, "", false);
@@ -2034,6 +2035,8 @@ void Server::checkTimeoutClients(int epoll_fd)
                 fdsToClose.push_back(client_fd);
             }
         }
+        if (!not_done)
+            continueSending(client_fd);
     }
     for (size_t i = 0; i < fdsToClose.size(); i++)
         closeClient(epoll_fd, fdsToClose[i], true);
@@ -2430,16 +2433,21 @@ void Server::checkTimeoutCGI(int epoll_fd)
 
     for (std::map<int, CgiState>::iterator it = cgi_states.begin(); it != cgi_states.end(); it++)
     {
+        bool not_done = true;
         if (difftime(now, it->second.start_time) > 3)
         {
-            std::cerr << "CGI timeout for PID " << it->second.state.pid << std::endl;
+            // std::cerr << "CGI timeout for PID " << it->second.state.pid << std::endl;
             it->second.state.process_complete = true;
             it->second.state.response_sent_to_client = true;
             std::string response = buildResponse(buildErrorPage(504), ".html", 504, false, "", it->second.state.request.keep_alive);
-            sendResponse(it->second.state.client_fd, response, it->second.state.request.keep_alive);
-
+            if (error_pages.count("504") && fileValid(error_pages["504"])) 
+                not_done = sendFileResponse(it->second.state.client_fd, error_pages["504"], getExtension(error_pages["504"]), 504, it->second.state.request.keep_alive);
+            else
+                sendResponse(it->second.state.client_fd, response, it->second.state.request.keep_alive);
             timed_out.push_back(it->first);
         }
+        if (!not_done)
+            continueSending(it->second.state.client_fd);
     }
     for (size_t i = 0; i < timed_out.size(); i++)
         cleanupCGI(epoll_fd, timed_out[i], true);
