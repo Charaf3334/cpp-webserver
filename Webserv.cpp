@@ -28,7 +28,7 @@ Webserv::Webserv(const Webserv &theOtherObject)
     this->content_type = theOtherObject.content_type;
 }
 
-Webserv& Webserv::operator=(const Webserv &theOtherObject)
+Webserv &Webserv::operator=(const Webserv &theOtherObject)
 {
     if (this != &theOtherObject)
     {
@@ -51,7 +51,7 @@ Webserv::~Webserv()
 bool Webserv::isFileEmpty(void)
 {
     char c;
-    
+
     while (this->config_file.get(c))
     {
         if (!std::isspace(static_cast<unsigned char>(c)))
@@ -94,10 +94,10 @@ size_t Webserv::countParts(const std::string line) const
     return count;
 }
 
-std::string* Webserv::split(const std::string line)
+std::string *Webserv::split(const std::string line)
 {
     size_t count = this->countParts(line);
-    std::string* parts = new std::string[count];
+    std::string *parts = new std::string[count];
     size_t i = 0;
     size_t idx = 0;
     bool in_quotes = false;
@@ -168,15 +168,10 @@ void Webserv::assignStatusCodes(void)
     status_codes[401] = "Unauthorized";
     status_codes[403] = "Forbidden";
     status_codes[404] = "Not Found";
-    status_codes[405] = "Method Not Allowed"; // HTTP/1.1
-    status_codes[408] = "Request Timeout"; // HTTP/1.1
-    status_codes[411] = "length required"; // HTTP/1.1
-    status_codes[413] = "Payload Too Large"; // HTTP/1.1
     status_codes[500] = "Internal Server Error";
     status_codes[501] = "Not Implemented";
     status_codes[502] = "Bad Gateway";
     status_codes[503] = "Service Unavailable";
-    status_codes[504] = "Gateway Timeout"; // HTTP/1.1
 }
 
 void Webserv::assignContentType(void)
@@ -281,44 +276,6 @@ bool Webserv::isValidStatusCode(const std::string code)
     return true;
 }
 
-void Webserv::print_conf(void) {
-        std::cout << "ERROR PAGES\n";
-    for (std::map<std::string, std::string>::iterator it = error_pages.begin(); it != error_pages.end(); it++)
-        std::cout << "Error_page: " << it->first << " -> " << it->second << std::endl;
-    
-    std::cout << "MAX_CLIENT_BODY_SIZE: " << client_max_body_size << std::endl;
-    for (size_t i = 0; i < servers.size(); i++)
-    {
-        std::cout << "\nSERVER[" << i << "]\n";
-        std::cout << "Listen: " << servers[i].ip_address <<  ":" << servers[i].port << std::endl;
-        std::cout << "Server Root: " << servers[i].root << std::endl;
-        for (size_t j = 0; j < servers[i].locations.size(); j++)
-        {
-            std::cout << "  \nLOCATION[" << j << "]\n";
-            std::cout << "    Path: " << j << " " << servers[i].locations[j].path << std::endl;
-            std::cout << "    Root: " << j << " " << servers[i].locations[j].root << std::endl;
-            for (size_t k = 0; k < servers[i].locations[j].index.size(); k++)
-            {
-                std::cout << "    Index: " << j << " " << servers[i].locations[j].index[k] << std::endl;
-            }
-            for (size_t k = 0; k < servers[i].locations[j].methods.size(); k++)
-            {
-                std::cout << "    Methods: " << j << " " << servers[i].locations[j].methods[k] << std::endl;
-            }
-            std::cout << "    Autoindex: " << j << " " << (servers[i].locations[j].autoindex ? "True" : "False") << std::endl;
-            std::cout << "    Redirection: " << j << " " << (servers[i].locations[j].isRedirection ? "True" : "False") << std::endl;
-            if (servers[i].locations[j].isRedirection)
-            {
-                std::cout << "    is Text: " << (servers[i].locations[j].redirectionIsText ? "True" : "False") << std::endl;
-                std::cout << "    Code & URL/TEXT: " << servers[i].locations[j].redirection.first << " -> " << "|" << servers[i].locations[j].redirection.second << "|" << std::endl;
-            }
-            std::cout << "    Upload: " << servers[i].locations[j].upload_dir << std::endl;
-            std::cout << "    Cgi: " << (servers[i].locations[j].hasCgi ? "on" : "off") << std::endl;
-        }
-        std::cout << "-------------------------------------------------" << std::endl;
-    }
-}
-
 bool Webserv::htmlPage(std::string path)
 {
     size_t pos = path.find_last_of("/");
@@ -336,7 +293,7 @@ void Webserv::read_file(void)
     while (std::getline(this->config_file, line))
     {
         std::string *parts = this->split(line);
-        
+
         for (size_t i = 0; i < this->countParts(line); i++)
             this->tokens.push_back(parts[i]);
         delete[] parts;
@@ -443,9 +400,7 @@ void Webserv::read_file(void)
         throw std::runtime_error("Error: Multiple servers listen to same ports.");
     if (checkDuplicatePaths())
         throw std::runtime_error("Error: Server has the same location path multiple times.");
-    // print_conf();
 }
-
 
 bool Webserv::checkMaxBodySize(const std::string value)
 {
@@ -461,7 +416,7 @@ bool Webserv::checkMaxBodySize(const std::string value)
 
 bool Webserv::checkDuplicatePorts(void) const
 {
-    std::set<std::pair<std::string, int> > seen;
+    std::set<std::pair<std::string, int>> seen;
     for (size_t i = 0; i < servers.size(); i++)
     {
         std::pair<std::string, int> pair(servers[i].ip_address, servers[i].port);
@@ -472,11 +427,10 @@ bool Webserv::checkDuplicatePorts(void) const
     return false;
 }
 
-
 bool Webserv::checkDuplicatePaths(void)
 {
     std::set<std::string> Set;
-    for (size_t i = 0; i < servers.size(); i++) 
+    for (size_t i = 0; i < servers.size(); i++)
     {
         Set.clear();
         for (size_t j = 0; j < servers[i].locations.size(); j++)
@@ -513,7 +467,6 @@ bool Webserv::checkSemicolon(void) const
     }
     return true;
 }
-
 
 std::string Webserv::getAddress(sockaddr_in *addr, addrinfo *result, bool should_free)
 {
@@ -687,9 +640,7 @@ bool Webserv::checkUrlText(size_t i, Location &location, bool code_present, int 
             throw std::runtime_error("Error: Code for return path incorrect.");
         location.redirect_relative = true;
     }
-    else if ((tokens[i][0] == 'h' && tokens[i][1] == 't' && tokens[i][2] == 't' && tokens[i][3] == 'p' && tokens[i][4] == ':'
-        && tokens[i][5] == '/' && tokens[i][6] == '/') || (tokens[i][0] == 'h' && tokens[i][1] == 't' && tokens[i][2] == 't' && tokens[i][3] == 'p' && tokens[i][4] == 's'
-        && tokens[i][5] == ':' && tokens[i][6] == '/' && tokens[i][7] == '/'))
+    else if ((tokens[i][0] == 'h' && tokens[i][1] == 't' && tokens[i][2] == 't' && tokens[i][3] == 'p' && tokens[i][4] == ':' && tokens[i][5] == '/' && tokens[i][6] == '/') || (tokens[i][0] == 'h' && tokens[i][1] == 't' && tokens[i][2] == 't' && tokens[i][3] == 'p' && tokens[i][4] == 's' && tokens[i][5] == ':' && tokens[i][6] == '/' && tokens[i][7] == '/'))
     {
         if ((tokens[i][0] == 'h' && tokens[i][1] == 't' && tokens[i][2] == 't' && tokens[i][3] == 'p' && tokens[i][4] == 's' && tokens[i][5] == ':' && tokens[i][6] == '/' && tokens[i][7] == '/'))
             isHttps = true;
@@ -784,7 +735,7 @@ Webserv::Server Webserv::parseServer(size_t &i)
                 throw std::runtime_error("Error: Expected ';' after interface:port.");
             std::string s = tokens[i];
             if (!checkValidListen(s, isHost))
-                    throw std::runtime_error("Error: Listening address is invalid.");
+                throw std::runtime_error("Error: Listening address is invalid.");
             server.port = atoi(s.substr(s.find(':') + 1).c_str());
             if (isHost)
                 server.ip_address = convertHostToIp(s.substr(0, s.find(':')), "Error: Invalid listening host.");
@@ -840,7 +791,7 @@ bool Webserv::locationCmp(const Webserv::Location &l1, const Webserv::Location &
     return l1.path.size() > l2.path.size();
 }
 
-void Webserv::sortLocationPaths(Webserv::Server &server) 
+void Webserv::sortLocationPaths(Webserv::Server &server)
 {
     std::sort(server.locations.begin(), server.locations.end(), locationCmp);
 }
@@ -993,7 +944,7 @@ void Webserv::parseLocation(size_t &i, Webserv::Server &server, int &depth, bool
             i++;
             if (tokens[i] == ";")
                 throw std::runtime_error("Error: Empty cgi field.");
-            
+
             if (tokens[i] == "on")
                 location.hasCgi = true;
             else if (tokens[i] != "off")

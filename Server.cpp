@@ -107,7 +107,7 @@ std::string Server::currentDate(void) const
     return std::string(buffer);
 }
 
-std::string Server::buildResponse(std::string body, std::string extension, int status, bool inRedirection, std::string newPath, bool keep_alive, const std::vector<std::pair<std::string, std::string> > &extra_headers)
+std::string Server::buildResponse(std::string body, std::string extension, int status, bool inRedirection, std::string newPath, bool keep_alive, const std::vector<std::pair<std::string, std::string>> &extra_headers)
 {
     std::string CRLF = "\r\n";
     std::string response;
@@ -305,15 +305,15 @@ std::string Server::readRequest(int epoll_fd, int client_fd, bool &been_here)
                 client.request.location = getLocation(client.request.uri, server);
                 if (!isMethodAllowed("POST", client.request.location))
                 {
-                    if (error_pages.count("405") && fileValid(error_pages["405"]))
+                    if (error_pages.count("400") && fileValid(error_pages["400"]))
                     {
-                        sendFileResponse(client_fd, error_pages["405"], getExtension(error_pages["405"]), 405, client.request.keep_alive);
+                        sendFileResponse(client_fd, error_pages["400"], getExtension(error_pages["400"]), 400, client.request.keep_alive);
                         client.is_request_full = true;
                         return "";
                     }
                     else
                     {
-                        std::string response = buildResponse(buildErrorPage(405), ".html", 405, false, "", client.request.keep_alive);
+                        std::string response = buildResponse(buildErrorPage(400), ".html", 400, false, "", client.request.keep_alive);
                         sendResponse(client_fd, response, client.request.keep_alive);
                         client.is_request_full = true;
                         client.keep_alive = client.request.keep_alive;
@@ -370,15 +370,15 @@ std::string Server::readRequest(int epoll_fd, int client_fd, bool &been_here)
                 }
                 if (client.content_len > client_max_body_size)
                 {
-                    if (error_pages.count("413") && fileValid(error_pages["413"]))
+                    if (error_pages.count("400") && fileValid(error_pages["400"]))
                     {
-                        sendFileResponse(client_fd, error_pages["413"], getExtension(error_pages["413"]), 413, client.request.keep_alive);
+                        sendFileResponse(client_fd, error_pages["400"], getExtension(error_pages["400"]), 400, client.request.keep_alive);
                         client.is_request_full = true;
                         return "";
                     }
                     else
                     {
-                        std::string response = buildResponse(buildErrorPage(413), ".html", 413, false, "", client.request.keep_alive);
+                        std::string response = buildResponse(buildErrorPage(400), ".html", 400, false, "", client.request.keep_alive);
                         sendResponse(client_fd, response, client.request.keep_alive);
                         client.is_request_full = true;
                         client.keep_alive = client.request.keep_alive;
@@ -830,15 +830,15 @@ std::string Server::readRequest(int epoll_fd, int client_fd, bool &been_here)
         {
             if (client.content_len > 60000)
             {
-                if (error_pages.count("413") && fileValid(error_pages["413"]))
+                if (error_pages.count("400") && fileValid(error_pages["400"]))
                 {
-                    sendFileResponse(client_fd, error_pages["413"], getExtension(error_pages["413"]), 413, client.request.keep_alive);
+                    sendFileResponse(client_fd, error_pages["400"], getExtension(error_pages["400"]), 400, client.request.keep_alive);
                     client.is_request_full = true;
                     return "";
                 }
                 else
                 {
-                    std::string response = buildResponse(buildErrorPage(413), ".html", 413, false, "", client.request.keep_alive);
+                    std::string response = buildResponse(buildErrorPage(400), ".html", 400, false, "", client.request.keep_alive);
                     sendResponse(client_fd, response, client.request.keep_alive);
                     client.is_request_full = true;
                     client.keep_alive = client.request.keep_alive;
@@ -1517,40 +1517,42 @@ std::string Server::buildErrorPage(int code)
         "    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n"
         "    <title>" +
         tostring(code) + std::string(" ") + status_codes[code] + "</title>\n"
-        "    <style>\n"
-        "        body {\n"
-        "            display: flex;\n"
-        "            flex-direction: column;\n"
-        "            justify-content: center;\n"
-        "            align-items: center;\n"
-        "            height: 100vh;\n"
-        "            margin: 0;\n"
-        "            font-family: Arial, sans-serif;\n"
-        "            background-color: #f8f8f8;\n"
-        "            color: #333;\n"
-        "        }\n"
-        "        h1 {\n"
-        "            font-size: 6em;\n"
-        "            margin: 0;\n"
-        "        }\n"
-        "        p {\n"
-        "            font-size: 1.5em;\n"
-        "        }\n"
-        "        a {\n"
-        "            margin-top: 20px;\n"
-        "            text-decoration: none;\n"
-        "            color: #007BFF;\n"
-        "        }\n"
-        "        a:hover {\n"
-        "            text-decoration: underline;\n"
-        "        }\n"
-        "    </style>\n"
-        "</head>\n"
-        "<body>\n"
-        "<h1>" + tostring(code) + "</h1>\n"
-        "<p>" + status_codes[code] + "</p>\n"
-        "</body>\n"
-        "</html>\n";
+                                                                 "    <style>\n"
+                                                                 "        body {\n"
+                                                                 "            display: flex;\n"
+                                                                 "            flex-direction: column;\n"
+                                                                 "            justify-content: center;\n"
+                                                                 "            align-items: center;\n"
+                                                                 "            height: 100vh;\n"
+                                                                 "            margin: 0;\n"
+                                                                 "            font-family: Arial, sans-serif;\n"
+                                                                 "            background-color: #f8f8f8;\n"
+                                                                 "            color: #333;\n"
+                                                                 "        }\n"
+                                                                 "        h1 {\n"
+                                                                 "            font-size: 6em;\n"
+                                                                 "            margin: 0;\n"
+                                                                 "        }\n"
+                                                                 "        p {\n"
+                                                                 "            font-size: 1.5em;\n"
+                                                                 "        }\n"
+                                                                 "        a {\n"
+                                                                 "            margin-top: 20px;\n"
+                                                                 "            text-decoration: none;\n"
+                                                                 "            color: #007BFF;\n"
+                                                                 "        }\n"
+                                                                 "        a:hover {\n"
+                                                                 "            text-decoration: underline;\n"
+                                                                 "        }\n"
+                                                                 "    </style>\n"
+                                                                 "</head>\n"
+                                                                 "<body>\n"
+                                                                 "<h1>" +
+        tostring(code) + "</h1>\n"
+                         "<p>" +
+        status_codes[code] + "</p>\n"
+                             "</body>\n"
+                             "</html>\n";
     return html;
 }
 
@@ -1717,11 +1719,11 @@ bool Server::serveClient(int client_fd, Request request, int epoll_fd)
             Webserv::Location location = getLocation(request.uri, server);
             if (!isMethodAllowed("GET", location))
             {
-                if (error_pages.count("405") && fileValid(error_pages["405"]))
-                    return sendFileResponse(client_fd, error_pages["405"], getExtension(error_pages["405"]), 405, request.keep_alive);
+                if (error_pages.count("400") && fileValid(error_pages["400"]))
+                    return sendFileResponse(client_fd, error_pages["400"], getExtension(error_pages["400"]), 400, request.keep_alive);
                 else
                 {
-                    std::string response = buildResponse(buildErrorPage(405), ".html", 405, false, "", request.keep_alive);
+                    std::string response = buildResponse(buildErrorPage(400), ".html", 400, false, "", request.keep_alive);
                     return sendResponse(client_fd, response, request.keep_alive);
                 }
             }
@@ -1906,11 +1908,11 @@ bool Server::serveClient(int client_fd, Request request, int epoll_fd)
             Webserv::Location location = getLocation(request.uri, server);
             if (!isMethodAllowed("DELETE", location))
             {
-                if (error_pages.count("405") && fileValid(error_pages["405"]))
-                    return sendFileResponse(client_fd, error_pages["405"], getExtension(error_pages["405"]), 405, request.keep_alive);
+                if (error_pages.count("400") && fileValid(error_pages["400"]))
+                    return sendFileResponse(client_fd, error_pages["400"], getExtension(error_pages["400"]), 400, request.keep_alive);
                 else
                 {
-                    std::string response = buildResponse(buildErrorPage(405), ".html", 405, false, "", request.keep_alive);
+                    std::string response = buildResponse(buildErrorPage(400), ".html", 400, false, "", request.keep_alive);
                     return sendResponse(client_fd, response, request.keep_alive);
                 }
             }
@@ -2371,7 +2373,7 @@ void Server::handleCGIOutput(int epoll_fd, int pipe_fd)
 {
     if (cgi_states.find(pipe_fd) == cgi_states.end())
         return;
-    
+
     CgiState &cgi_state = cgi_states[pipe_fd];
     CGI cgi(this, cgi_state.state.request, cgi_state.state.script_path, cgi_state.state.extension);
     cgi.handleOutput(cgi_state.state);
@@ -2394,7 +2396,7 @@ void Server::handleCGIOutput(int epoll_fd, int pipe_fd)
                     response = buildResponse(buildErrorPage(500), ".html", 500, false, "", false);
             }
             // in case kan error, check first if error page msetiya flconfig else serve default ones
-            if (error_status_in_cgi && error_pages.count(tostring(error_status_code_cgi)) && fileValid(error_pages[tostring(error_status_code_cgi)])) 
+            if (error_status_in_cgi && error_pages.count(tostring(error_status_code_cgi)) && fileValid(error_pages[tostring(error_status_code_cgi)]))
             {
                 response = "";
                 sendFileResponse(cgi_state.state.client_fd, error_pages[tostring(error_status_code_cgi)], getExtension(error_pages[tostring(error_status_code_cgi)]), error_status_code_cgi, cgi_state.state.request.keep_alive);
@@ -2439,9 +2441,9 @@ void Server::checkTimeoutCGI(int epoll_fd)
             // std::cerr << "CGI timeout for PID " << it->second.state.pid << std::endl;
             it->second.state.process_complete = true;
             it->second.state.response_sent_to_client = true;
-            std::string response = buildResponse(buildErrorPage(504), ".html", 504, false, "", it->second.state.request.keep_alive);
-            if (error_pages.count("504") && fileValid(error_pages["504"])) 
-                not_done = sendFileResponse(it->second.state.client_fd, error_pages["504"], getExtension(error_pages["504"]), 504, it->second.state.request.keep_alive);
+            std::string response = buildResponse(buildErrorPage(400), ".html", 400, false, "", it->second.state.request.keep_alive);
+            if (error_pages.count("400") && fileValid(error_pages["400"]))
+                not_done = sendFileResponse(it->second.state.client_fd, error_pages["400"], getExtension(error_pages["400"]), 400, it->second.state.request.keep_alive);
             else
                 sendResponse(it->second.state.client_fd, response, it->second.state.request.keep_alive);
             timed_out.push_back(it->first);
