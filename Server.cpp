@@ -107,7 +107,7 @@ std::string Server::currentDate(void) const
     return std::string(buffer);
 }
 
-std::string Server::buildResponse(std::string body, std::string extension, int status, bool inRedirection, std::string newPath, bool keep_alive, const std::vector<std::pair<std::string, std::string>> &extra_headers)
+std::string Server::buildResponse(std::string body, std::string extension, int status, bool inRedirection, std::string newPath, bool keep_alive, const std::vector<std::pair<std::string, std::string> > &extra_headers)
 {
     std::string CRLF = "\r\n";
     std::string response;
@@ -1703,7 +1703,6 @@ bool Server::serveClient(int client_fd, Request request, int epoll_fd)
     {
         server = *clientfd_to_server[client_fd];
         struct stat st;
-
         if (!isUriExists(request.uri, server, false))
         {
             if (error_pages.count("404") && fileValid(error_pages["404"]))
