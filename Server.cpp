@@ -198,7 +198,6 @@ std::string Server::readRequest(int epoll_fd, int client_fd, bool &been_here)
     while (1)
     {
         client.bytes = read(client_fd, client.buffer, sizeof(client.buffer));
-
         if (client.bytes == -1 && client.packet_ended)
         {
             if (client.is_post)
@@ -385,6 +384,45 @@ std::string Server::readRequest(int epoll_fd, int client_fd, bool &been_here)
                         return "";
                     }
                 }
+                struct stat st1;
+                if (stat(client.request.location.root.c_str(), &st1) == -1)
+                {
+                    if (errno == EACCES)
+                    {
+                        if (access(client.request.location.root.c_str(), R_OK) != 0)
+                        {
+                            if (error_pages.count("403") && fileValid(error_pages["403"]))
+                            {
+                                sendFileResponse(client_fd, error_pages["403"], getExtension(error_pages["403"]), 403, client.request.keep_alive);
+                                client.is_request_full = true;
+                                return "";
+                            }
+                            else
+                            {
+                                std::string response = buildResponse(buildErrorPage(403), ".html", 403, false, "", client.request.keep_alive);
+                                sendResponse(client_fd, response, client.request.keep_alive);
+                                client.is_request_full = true;
+                                return "";
+                            }
+                        }
+                    }
+                    else
+                    {
+                        if (error_pages.count("404") && fileValid(error_pages["404"]))
+                        {
+                            sendFileResponse(client_fd, error_pages["404"], getExtension(error_pages["404"]), 404, client.request.keep_alive);
+                            client.is_request_full = true;
+                            return "";
+                        }
+                        else
+                        {
+                            std::string response = buildResponse(buildErrorPage(404), ".html", 404, false, "", client.request.keep_alive);
+                            sendResponse(client_fd, response, client.request.keep_alive);
+                            client.is_request_full = true;
+                            return "";
+                        }
+                    }
+                }
                 std::string toSearch = buildSearchingFile(client.request.location.root, client.request.uri, client.request.location);
                 size_t pos = simplifyPath(toSearch).find(client.request.location.root);
                 if (pos == std::string::npos || pos != 0)
@@ -406,6 +444,26 @@ std::string Server::readRequest(int epoll_fd, int client_fd, bool &been_here)
                 }
                 if (stat(toSearch.c_str(), &st) == -1)
                 {
+                    std::string file_dire = toSearch.substr(0, toSearch.find_last_of('/'));
+                    if (access(file_dire.c_str(), F_OK) == 0)
+                    {
+                        if (access(file_dire.c_str(), R_OK) != 0)
+                        {
+                            if (error_pages.count("403") && fileValid(error_pages["403"]))
+                            {
+                                sendFileResponse(client_fd, error_pages["403"], getExtension(error_pages["403"]), 403, client.request.keep_alive);
+                                client.is_request_full = true;
+                                return "";
+                            }
+                            else
+                            {
+                                std::string response = buildResponse(buildErrorPage(403), ".html", 403, false, "", client.request.keep_alive);
+                                sendResponse(client_fd, response, client.request.keep_alive);
+                                client.is_request_full = true;
+                                return "";
+                            }
+                        }
+                    }
                     if (error_pages.count("404") && fileValid(error_pages["404"]))
                     {
                         sendFileResponse(client_fd, error_pages["404"], getExtension(error_pages["404"]), 404, client.request.keep_alive);
@@ -905,11 +963,6 @@ std::string Server::readRequest(int epoll_fd, int client_fd, bool &been_here)
         {
             if (!client.content_lenght_present)
             {
-                if (client.total_bytes_written > 0)
-                {
-                    client.is_request_full = true;
-                    return client.headers;
-                }
                 client.is_request_full = true;
                 return client.headers;
             }
@@ -1515,44 +1568,41 @@ std::string Server::buildErrorPage(int code)
         "<head>\n"
         "    <meta charset=\"UTF-8\">\n"
         "    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n"
-        "    <title>" +
-        tostring(code) + std::string(" ") + status_codes[code] + "</title>\n"
-                                                                 "    <style>\n"
-                                                                 "        body {\n"
-                                                                 "            display: flex;\n"
-                                                                 "            flex-direction: column;\n"
-                                                                 "            justify-content: center;\n"
-                                                                 "            align-items: center;\n"
-                                                                 "            height: 100vh;\n"
-                                                                 "            margin: 0;\n"
-                                                                 "            font-family: Arial, sans-serif;\n"
-                                                                 "            background-color: #f8f8f8;\n"
-                                                                 "            color: #333;\n"
-                                                                 "        }\n"
-                                                                 "        h1 {\n"
-                                                                 "            font-size: 6em;\n"
-                                                                 "            margin: 0;\n"
-                                                                 "        }\n"
-                                                                 "        p {\n"
-                                                                 "            font-size: 1.5em;\n"
-                                                                 "        }\n"
-                                                                 "        a {\n"
-                                                                 "            margin-top: 20px;\n"
-                                                                 "            text-decoration: none;\n"
-                                                                 "            color: #007BFF;\n"
-                                                                 "        }\n"
-                                                                 "        a:hover {\n"
-                                                                 "            text-decoration: underline;\n"
-                                                                 "        }\n"
-                                                                 "    </style>\n"
-                                                                 "</head>\n"
-                                                                 "<body>\n"
-                                                                 "<h1>" +
-        tostring(code) + "</h1>\n"
-                         "<p>" +
-        status_codes[code] + "</p>\n"
-                             "</body>\n"
-                             "</html>\n";
+        "    <title>" + tostring(code) + std::string(" ") + status_codes[code] + "</title>\n"
+        "    <style>\n"
+        "        body {\n"
+        "            display: flex;\n"
+        "            flex-direction: column;\n"
+        "            justify-content: center;\n"
+        "            align-items: center;\n"
+        "            height: 100vh;\n"
+        "            margin: 0;\n"
+        "            font-family: Arial, sans-serif;\n"
+        "            background-color: #f8f8f8;\n"
+        "            color: #333;\n"
+        "        }\n"
+        "        h1 {\n"
+        "            font-size: 6em;\n"
+        "            margin: 0;\n"
+        "        }\n"
+        "        p {\n"
+        "            font-size: 1.5em;\n"
+        "        }\n"
+        "        a {\n"
+        "            margin-top: 20px;\n"
+        "            text-decoration: none;\n"
+        "            color: #007BFF;\n"
+        "        }\n"
+        "        a:hover {\n"
+        "            text-decoration: underline;\n"
+        "        }\n"
+        "    </style>\n"
+        "</head>\n"
+        "<body>\n"
+        "<h1>" + tostring(code) + "</h1>\n"
+        "<p>" + status_codes[code] + "</p>\n"
+        "</body>\n"
+        "</html>\n";
     return html;
 }
 
@@ -1757,6 +1807,33 @@ bool Server::serveClient(int client_fd, Request request, int epoll_fd)
                     return sendResponse(client_fd, response, request.keep_alive);
                 }
             }
+            struct stat st1;
+            if (stat(location.root.c_str(), &st1) == -1)
+            {
+                if (errno == EACCES)
+                {
+                    if (access(location.root.c_str(), R_OK) != 0)
+                    {
+                        if (error_pages.count("403") && fileValid(error_pages["403"]))
+                            return sendFileResponse(client_fd, error_pages["403"], getExtension(error_pages["403"]), 403, request.keep_alive);
+                        else
+                        {
+                            std::string response = buildResponse(buildErrorPage(403), ".html", 403, false, "", request.keep_alive);
+                            return sendResponse(client_fd, response, request.keep_alive);
+                        }
+                    }
+                }
+                else
+                {
+                    if (error_pages.count("404") && fileValid(error_pages["404"]))
+                        return sendFileResponse(client_fd, error_pages["404"], getExtension(error_pages["404"]), 404, request.keep_alive);
+                    else
+                    {
+                        std::string response = buildResponse(buildErrorPage(404), ".html", 404, false, "", request.keep_alive);
+                        return sendResponse(client_fd, response, request.keep_alive);
+                    }
+                }
+            }
             std::string toSearch = buildSearchingFile(location.root, request.uri, location);
             size_t pos = simplifyPath(toSearch).find(location.root);
             if (pos == std::string::npos || pos != 0)
@@ -1771,6 +1848,20 @@ bool Server::serveClient(int client_fd, Request request, int epoll_fd)
             }
             if (stat(toSearch.c_str(), &st) == -1)
             {
+                std::string file_dire = toSearch.substr(0, toSearch.find_last_of('/'));
+                if (access(file_dire.c_str(), F_OK) == 0)
+                {
+                    if (access(file_dire.c_str(), R_OK) != 0)
+                    {
+                        if (error_pages.count("403") && fileValid(error_pages["403"]))
+                            return sendFileResponse(client_fd, error_pages["403"], getExtension(error_pages["403"]), 403, request.keep_alive);
+                        else
+                        {
+                            std::string response = buildResponse(buildErrorPage(403), ".html", 403, false, "", request.keep_alive);
+                            return sendResponse(client_fd, response, request.keep_alive);
+                        }
+                    }
+                }
                 if (error_pages.count("404") && fileValid(error_pages["404"]))
                     return sendFileResponse(client_fd, error_pages["404"], getExtension(error_pages["404"]), 404, request.keep_alive);
                 else
@@ -1915,6 +2006,33 @@ bool Server::serveClient(int client_fd, Request request, int epoll_fd)
                     return sendResponse(client_fd, response, request.keep_alive);
                 }
             }
+            struct stat st1;
+            if (stat(location.root.c_str(), &st1) == -1)
+            {
+                if (errno == EACCES)
+                {
+                    if (access(location.root.c_str(), R_OK) != 0)
+                    {
+                        if (error_pages.count("403") && fileValid(error_pages["403"]))
+                            return sendFileResponse(client_fd, error_pages["403"], getExtension(error_pages["403"]), 403, request.keep_alive);
+                        else
+                        {
+                            std::string response = buildResponse(buildErrorPage(403), ".html", 403, false, "", request.keep_alive);
+                            return sendResponse(client_fd, response, request.keep_alive);
+                        }
+                    }
+                }
+                else
+                {
+                    if (error_pages.count("404") && fileValid(error_pages["404"]))
+                        return sendFileResponse(client_fd, error_pages["404"], getExtension(error_pages["404"]), 404, request.keep_alive);
+                    else
+                    {
+                        std::string response = buildResponse(buildErrorPage(404), ".html", 404, false, "", request.keep_alive);
+                        return sendResponse(client_fd, response, request.keep_alive);
+                    }
+                }
+            }
             std::string filepath = buildSearchingFile(location.root, request.uri, location);
             size_t pos = simplifyPath(filepath).find(location.root);
             if (pos == std::string::npos || pos != 0)
@@ -1929,6 +2047,20 @@ bool Server::serveClient(int client_fd, Request request, int epoll_fd)
             }
             if (stat(filepath.c_str(), &st) == -1)
             {
+                std::string file_dire = filepath.substr(0, filepath.find_last_of('/'));
+                if (access(file_dire.c_str(), F_OK) == 0)
+                {
+                    if (access(file_dire.c_str(), W_OK) != 0 || access(file_dire.c_str(), X_OK) != 0)
+                    {
+                        if (error_pages.count("403") && fileValid(error_pages["403"]))
+                            return sendFileResponse(client_fd, error_pages["403"], getExtension(error_pages["403"]), 403, request.keep_alive);
+                        else
+                        {
+                            std::string response = buildResponse(buildErrorPage(403), ".html", 403, false, "", request.keep_alive);
+                            return sendResponse(client_fd, response, request.keep_alive);
+                        }
+                    }
+                }
                 if (error_pages.count("404") && fileValid(error_pages["404"]))
                     return sendFileResponse(client_fd, error_pages["404"], getExtension(error_pages["404"]), 404, request.keep_alive);
                 else
@@ -1940,17 +2072,6 @@ bool Server::serveClient(int client_fd, Request request, int epoll_fd)
             else
             {
                 if (S_ISDIR(st.st_mode))
-                {
-                    if (error_pages.count("403") && fileValid(error_pages["403"]))
-                        return sendFileResponse(client_fd, error_pages["403"], getExtension(error_pages["403"]), 403, request.keep_alive);
-                    else
-                    {
-                        std::string response = buildResponse(buildErrorPage(403), ".html", 403, false, "", request.keep_alive);
-                        return sendResponse(client_fd, response, request.keep_alive);
-                    }
-                }
-                std::string file_dire = filepath.substr(0, filepath.find_last_of('/'));
-                if (access(file_dire.c_str(), W_OK | X_OK) != 0)
                 {
                     if (error_pages.count("403") && fileValid(error_pages["403"]))
                         return sendFileResponse(client_fd, error_pages["403"], getExtension(error_pages["403"]), 403, request.keep_alive);
@@ -2313,7 +2434,7 @@ void Server::initialize(void)
                 {
                     if (request.method == "DELETE")
                         std::cout << RED << "[ " << request.method << " ] " << RESET << request.uri << " " << request.remote_addr << ":" << request.remote_port << std::endl;
-                    else
+                    else if (request.method == "GET")
                         std::cout << GREEN << "[ " << request.method << " ] " << RESET << request.uri << " " << request.remote_addr << ":" << request.remote_port << std::endl;
                 }
                 clientfd_to_request[fd] = request;
@@ -2394,7 +2515,7 @@ void Server::handleCGIOutput(int epoll_fd, int pipe_fd)
                 else
                     response = buildResponse(buildErrorPage(500), ".html", 500, false, "", false);
             }
-            // in case kan error, check first if error page msetiya flconfig else serve default ones
+
             if (error_status_in_cgi && error_pages.count(tostring(error_status_code_cgi)) && fileValid(error_pages[tostring(error_status_code_cgi)]))
             {
                 response = "";

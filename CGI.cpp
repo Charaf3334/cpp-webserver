@@ -126,7 +126,7 @@ void CGI::childProcess(int pipe_in[2], int pipe_out[2], int pipe_err[2])
     perror("execve");
     delete[] argv;
     delete[] env_cgi;
-    exit(1);
+    exit(1); // zakaria
 }
 
 void CGI::handleOutput(State &state)
