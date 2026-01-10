@@ -2019,6 +2019,37 @@ bool Server::serveClient(int client_fd, Request request, int epoll_fd)
                     return sendResponse(client_fd, response, request.keep_alive);
                 }
             }
+            if (location.isRedirection)
+            {
+                if (!location.redirectionIsText)
+                {
+                    if (location.redirect_relative)
+                    {
+                        if (!isUriExists(location.redirection.second, server, true))
+                        {
+                            if (error_pages.count("404") && fileValid(error_pages["404"]))
+                                return sendFileResponse(client_fd, error_pages["404"], getExtension(error_pages["404"]), 404, request.keep_alive);
+                            else
+                            {
+                                std::string response = buildResponse(buildErrorPage(404), ".html", 404, false, "", request.keep_alive);
+                                return sendResponse(client_fd, response, request.keep_alive);
+                            }
+                        }
+                        std::string response = buildResponse("", "", location.redirection.first, true, location.redirection.second, request.keep_alive);
+                        return sendResponse(client_fd, response, request.keep_alive);
+                    }
+                    else if (location.redirect_absolute)
+                    {
+                        std::string response = buildResponse("", "", location.redirection.first, true, location.redirection.second, request.keep_alive);
+                        return sendResponse(client_fd, response, request.keep_alive);
+                    }
+                }
+                else
+                {
+                    std::string response = buildResponse(location.redirection.second, "", location.redirection.first, false, "", request.keep_alive);
+                    return sendResponse(client_fd, response, request.keep_alive);
+                }
+            }
             struct stat st1;
             if (stat(location.root.c_str(), &st1) == -1)
             {
