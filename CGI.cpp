@@ -91,6 +91,7 @@ bool CGI::start(State &state)
                 ssize_t bytes_written = write(state.pipe_in[1], request.body.c_str(), request.body.size());
                 if (bytes_written == -1)
                     return false;
+                else if (bytes_written == 0) {}
             }
             close(state.pipe_in[1]);
             state.pipe_in[1] = -1;
@@ -126,7 +127,7 @@ void CGI::childProcess(int pipe_in[2], int pipe_out[2], int pipe_err[2])
     perror("execve");
     delete[] argv;
     delete[] env_cgi;
-    exit(1); // zakaria
+    exit(1);
 }
 
 void CGI::handleOutput(State &state)
