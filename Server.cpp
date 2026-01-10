@@ -1891,8 +1891,21 @@ bool Server::serveClient(int client_fd, Request request, int epoll_fd)
                         {
                             int code;
                             std::string body = dirlisntening_gen(request.uri, toSearch, code);
-                            std::string response = buildResponse(body, ".html", code, false, "", request.keep_alive);
-                            return sendResponse(client_fd, response, request.keep_alive);
+                            if (code == 200)
+                            {
+                                std::string response = buildResponse(body, ".html", code, false, "", request.keep_alive);
+                                return sendResponse(client_fd, response, request.keep_alive);
+                            }
+                            else
+                            {
+                                if (error_pages.count(tostring(code)) && fileValid(error_pages[tostring(code)]))
+                                    return sendFileResponse(client_fd, error_pages[tostring(code)], getExtension(error_pages[tostring(code)]), code, request.keep_alive);
+                                else
+                                {
+                                    std::string response = buildResponse(buildErrorPage(code), ".html", code, false, "", request.keep_alive);
+                                    return sendResponse(client_fd, response, request.keep_alive);
+                                }
+                            }
                         }
                     }
                     else
