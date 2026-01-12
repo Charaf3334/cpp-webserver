@@ -1433,8 +1433,10 @@ bool Server::parseRequest(int client_fd, std::string request_string, Request &re
         request.remote_addr = "127.0.0.1";
         request.remote_port = 0;
     }
-    if (request.method == "POST")
-        std::cout << YELLOW << "[ " << request.method << " ] " << RESET << request.uri << " " << request.remote_addr << ":" << request.remote_port << std::endl;
+    if (request.method == "POST") {
+        getCurrentTime();
+        std::cout << YELLOW << "[ " << request.method << "  ] " << CYAN << request.remote_addr << ":" << request.remote_port << " "  << RESET << request.uri << " " << std::endl;
+    }
     return true;
 }
 
@@ -1532,13 +1534,29 @@ std::string dirlisntening_gen(std::string request_uri, std::string path, int &co
     html_text += "<ul style=\"list-style-type: none; padding: 0;\">\n";
 
     struct dirent *entry;
+    int flag = 0;
     while ((entry = readdir(directory)) != NULL)
     {
+        for (int i = 0; i < 2 && flag <= 1; flag++, i++) {
+            std::string name;
+            if (i == 0)
+                name = ".";
+            else
+                name = "..";
+            name += "/";
+            html_text += "<li style=\"margin: 6px 0; display: flex; justify-content: space-between; align-items: center;\">";
+            html_text += "<a href=\"" + request_uri + name + "\" style=\"text-decoration: none; color: #0066cc; font-weight: bold;\">" + name + "</a>";
+            html_text += "</li>\n";
+        }
         std::string name = entry->d_name;
         std::string d_name = path + "/" + name;
 
+        
+
         struct stat st;
         stat(d_name.c_str(), &st);
+        if (name == "." || name == ".." || name == "../")
+            continue;
         if (S_ISDIR(st.st_mode))
         {
             name += "/";
@@ -2392,7 +2410,7 @@ void Server::initialize(void)
         }
         this->socket_fds.push_back(sock_fd);
         this->sockfd_to_server[sock_fd] = &servers[i];
-        std::cout << "Server " << i + 1 << " listening on: " << servers[i].ip_address << ":" << servers[i].port << std::endl;
+        std::cout << GREEN << "[INFO] Server " << YELLOW << i + 1 << GREEN << " listening on: " << CYAN << servers[i].ip_address << ":" << servers[i].port << RESET << std::endl;
     }
     epoll_event events[MAX_EVENTS];
     while (!shutdownFlag && countingFailedSockets != servers.size())
@@ -2422,7 +2440,8 @@ void Server::initialize(void)
                 if (client_fd != -1)
                 {
                     client_addresses[client_fd] = client_addr;
-                    std::cout << "New client " << client_fd << " connected from " << getAddress(&client_addr, NULL, false) << ":" << ntohs(client_addr.sin_port) << std::endl;
+                    getCurrentTime();
+                    std::cout << CYAN << "[CONNECT] " << RESET << "Client " << YELLOW << client_fd << RESET << " connected from " << CYAN << getAddress(&client_addr, NULL, false) << ":" << ntohs(client_addr.sin_port) << RESET << std::endl;
                     setNonBlockingFD(client_fd);
                     this->clientfd_to_server[client_fd] = this->sockfd_to_server[fd];
                     this->client_fds.push_back(client_fd);
@@ -2476,10 +2495,14 @@ void Server::initialize(void)
                 }
                 if (!is_post)
                 {
-                    if (request.method == "DELETE")
-                        std::cout << RED << "[ " << request.method << " ] " << RESET << request.uri << " " << request.remote_addr << ":" << request.remote_port << std::endl;
-                    else if (request.method == "GET")
-                        std::cout << GREEN << "[ " << request.method << " ] " << RESET << request.uri << " " << request.remote_addr << ":" << request.remote_port << std::endl;
+                    if (request.method == "DELETE") {
+                        getCurrentTime();
+                        std::cout << RED << "[" << request.method << " ] " << CYAN << request.remote_addr << ":" << request.remote_port << RESET << " " << request.uri << " "  << std::endl;
+                    }
+                    else if (request.method == "GET") {
+                        getCurrentTime();
+                        std::cout << GREEN << "[  " << request.method << "  ] " << CYAN << request.remote_addr << ":" << request.remote_port << RESET << " " << request.uri << " "  << std::endl;
+                    }
                 }
                 clientfd_to_request[fd] = request;
                 bool sending_done = false;

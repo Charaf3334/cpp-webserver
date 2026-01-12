@@ -970,3 +970,13 @@ void Webserv::parseLocation(size_t &i, Webserv::Server &server, int &depth, bool
         depth--;
     server.locations.push_back(location);
 }
+
+void Webserv::getCurrentTime() {
+    std::time_t now = std::time(NULL);
+    std::tm *tm = std::localtime(&now);
+
+    char buf[20];
+    std::strftime(buf, sizeof(buf), "%d-%m-%Y %H:%M:%S", tm);
+
+    std::cout << GRAY << "[" << buf << "]" << RESET << " ";
+}

@@ -400,7 +400,7 @@ void CGI::setupAuthEnvironment()
 
 void CGI::setupServerEnvironment()
 {
-    std::string server_name = "localhost";
+    std::string server_name = "";
     std::string server_port = "80";
         
     std::map<std::string, std::string>::iterator it = request.headers.find("host");
@@ -421,7 +421,7 @@ void CGI::setupServerEnvironment()
     env_vars.push_back("SERVER_NAME=" + server_name);
     env_vars.push_back("SERVER_PORT=" + server_port);
 
-    std::string remote_addr = "127.0.0.1";
+    std::string remote_addr = "";
     int remote_port = 0;
     if (server) {
         remote_addr = request.remote_addr;

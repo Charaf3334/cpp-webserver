@@ -545,3 +545,75 @@ main {
     font-size: 14px;
     margin-top: 6px;
 }
+
+/* Streaming Page Styles */
+.stream-container {
+    padding: 2rem;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.back-btn {
+    display: inline-block;
+    background: #475569;
+    color: white;
+    padding: 0.75rem 1.5rem;
+    border-radius: 8px;
+    text-decoration: none;
+    margin-bottom: 2rem;
+    transition: background 0.3s;
+    font-weight: bold;
+}
+
+.back-btn:hover {
+    background: #64748b;
+}
+
+.movie-player-section {
+    background: #1e293b;
+    border-radius: 12px;
+    padding: 2rem;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.movie-title {
+    color: #f8fafc;
+    font-size: 2rem;
+    margin-bottom: 1.5rem;
+    text-align: center;
+}
+
+.video-wrapper {
+    margin-bottom: 2rem;
+}
+
+.movie-player {
+    width: 100%;
+    max-height: 70vh;
+    border-radius: 8px;
+    background: #000;
+}
+
+.movie-description {
+    margin-top: 2rem;
+    padding: 1.5rem;
+    background: #2d3748;
+    border-radius: 8px;
+    color: #cbd5e1;
+    line-height: 1.6;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .stream-container {
+        padding: 1rem;
+    }
+    
+    .movie-player-section {
+        padding: 1rem;
+    }
+    
+    .movie-title {
+        font-size: 1.5rem;
+    }
+}

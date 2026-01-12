@@ -4,13 +4,15 @@
       "title": "Taxi Driver",
       "year": 1976,
       "description": "Meet Travis Bickle: A guy who believes the world is falling apart... so naturally, he buys a gun, gets a mohawk, and decides that *he's* the solution. Honestly, it's hard to find a more ‘relatable' character in all of cinema. He's just trying to 'clean up the streets' while *every single* conversation with him is a red flag.",
-      "url": "images/taxi_driver.jpg"
+      "url": "images/taxi_driver.jpg",
+      "movie_url": "movies/Taxi_Driver.mkv"
     },
     {
       "title": "Fight Club",
       "year": 1999,
       "description": "Who doesn't want to join an underground fight club to scream out their existential crises? It's basically a DIY therapy session that also doubles as a great excuse to punch people in the face. Oh, and don't forget the rules: You don't talk about it. How *original* and *deep*!",
-      "url": "images/fight_club.jpg"
+      "url": "images/fight_club.jpg",
+      "movie_url": "movies/Fight_Club.mp4"
     },
     {
       "title": "Inglourious Basterds",
