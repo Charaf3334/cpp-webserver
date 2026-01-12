@@ -22,7 +22,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     echo "<p>No POST data yet</p>";
 }
 
-// CGI / server variables
 $server_vars = [
     "AUTH_TYPE",
     "CONTENT_LENGTH",
